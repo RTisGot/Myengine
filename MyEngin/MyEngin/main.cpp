@@ -148,6 +148,8 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
+		Tagsystem::ShowImGuiWindow();
+
 		// 左側：アウトライナー (物体の一覧)
 		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 		ImGui::SetNextWindowSize(ImVec2(300, display_h), ImGuiCond_Always);

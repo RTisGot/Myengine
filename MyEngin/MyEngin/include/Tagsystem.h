@@ -31,6 +31,52 @@ public:
             }
         }
     }
+
+    static void ShowImGuiWindow() {
+        ImGui::Begin("Tag Interaction Editor");
+        static char tagABuf[64] = "";
+        static char tagBBuf[64] = "";
+        static int selectedAction = 0;
+        const char* actionNames[] = {"Destroy", "Ignore"};//選択肢
+
+        ImGui::InputText("Tag A", tagABuf, 64);
+        ImGui::InputText("Tag B", tagBBuf, 64);
+        ImGui::Combo("Action Type", &selectedAction, actionNames, IM_ARRAYSIZE(actionNames));
+
+        if(ImGui::Button("Add Interaction Rule")){
+            InteractionRule newRule;
+            newRule.tagA = tagABuf;
+			newRule.tagB = tagBBuf;
+            
+            if (selectedAction == 0) {
+                newRule.action = [](GameObject& a, GameObject& b) {
+                    std::cout << "規則発動: オブジェクトを破棄!" << std::endl;
+                    };
+            }
+            else if (selectedAction == 1){
+                newRule.action = [](GameObject& a, GameObject& b) {
+                    a.addTag("OnFire");
+                    b.addTag("OnFire");
+                    };
+            }
+            rules.push_back(newRule);
+        }
+
+        ImGui::Separator();
+
+        // 2. 現在登録されているルールの一覧表示
+        ImGui::Text("Current Rules:");
+        for (int i = 0; i < rules.size(); i++) {
+            ImGui::BulletText("%s + %s -> [Action]", rules[i].tagA.c_str(), rules[i].tagB.c_str());
+            ImGui::SameLine();
+            if (ImGui::Button(("Delete##" + std::to_string(i)).c_str())) {
+                rules.erase(rules.begin() + i);
+            }
+        }
+
+        ImGui::End();
+    }
+
 private:
 	// ルールを適用する関数
     static void ApplyRules(GameObject& a, GameObject& b) {
