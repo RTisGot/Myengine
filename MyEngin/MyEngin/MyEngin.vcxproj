@@ -154,6 +154,7 @@
     <ClInclude Include="include\Model.h" />
     <ClInclude Include="include\MyEngine.h" />
     <ClInclude Include="include\Shader.h" />
+    <ClInclude Include="include\Tagsystem.h" />
     <ClInclude Include="src\Core\Math.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

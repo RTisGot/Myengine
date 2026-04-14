@@ -4,6 +4,7 @@
 #include "imgui/imgui_impl_opengl3.h"
 #include "Mesh.h"
 #include "GameObject.h"
+#include "Tagsystem.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
@@ -112,6 +113,7 @@ int main()
 
 	static float yaw = -90.0f; // 左右の向き
 	static float pitch = 0.0f; // 上下の向き
+	float radius = 5.0f;
 	static double lastX = 400, lastY = 300;
 	static bool firstMouse = true;
 
@@ -146,7 +148,7 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		// 1. 左側：アウトライナー (物体の一覧)
+		// 左側：アウトライナー (物体の一覧)
 		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 		ImGui::SetNextWindowSize(ImVec2(300, display_h), ImGuiCond_Always);
 		ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
@@ -168,7 +170,7 @@ int main()
 		}
 		ImGui::End();
 
-		// 2. 右側トランスフォーム詳細
+		// 右側トランスフォーム詳細
 		// ※今回は左側の下半分に配置する例
 		ImGui::SetNextWindowPos(ImVec2(0, display_h * 0.5f), ImGuiCond_Always);
 		ImGui::SetNextWindowSize(ImVec2(300, display_h * 0.5f), ImGuiCond_Always);
@@ -187,7 +189,7 @@ int main()
 		}
 		ImGui::End();
 
-		// 3. 真ん中：エディタ情報（オーバーレイ）
+		//  真ん中：エディタ情報
 		ImGui::SetNextWindowPos(ImVec2(310, 10), ImGuiCond_Always);
 		ImGui::Begin("Viewport Info", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs);
 		{
@@ -210,15 +212,47 @@ int main()
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		Vector3 cameraFront = glm::normalize(front);
 
-		Matrix4 view = glm::lookAt(
+		/*Matrix4 view = glm::lookAt(
 			Vector3(camPos[0], camPos[1], camPos[2]),
 			Vector3(camPos[0], camPos[1], camPos[2]) + cameraFront,
 			Vector3(0.0f, 1.0f, 0.0f)
-		);
+		);*/
+
+		Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);
+		glm::vec3 targetPos = glm::vec3(0.0f, 0.0f, 0.0f);
+
+		// 上方向ベクトル
+		glm::vec3 upVec = glm::vec3(0.0f, 1.0f, 0.0f);
+
+		
 		//カメラの操作
 		ImGui::Begin("Camera Editor");
 		ImGui::SliderFloat3("Camera Position", camPos, -10.0f, 10.0f);
 		ImGui::End();
+		
+		// 2. カメラ操作ロジック 
+		if (!io.WantCaptureMouse) {
+			// --- ズーム (ホイール) ---
+			if (io.MouseWheel != 0.0f) {
+				radius -= io.MouseWheel * 1.0f;
+				if (radius < 0.1f) radius = 0.1f;
+			}
+
+			// --- 回転 (中央クリック) ---
+			if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+				float sensitivity = 0.2f;
+				yaw += io.MouseDelta.x * sensitivity;
+				pitch -= io.MouseDelta.y * sensitivity;
+				if (pitch > 89.0f)  pitch = 89.0f;
+				if (pitch < -89.0f) pitch = -89.0f;
+			}
+		}
+
+		// 3. ★カメラ座標とView行列を確定させる (これが全ての基準になる)
+		camVec.x = targetPos.x + radius * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+		camVec.y = targetPos.y + radius * sin(glm::radians(pitch));
+		camVec.z = targetPos.z + radius * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+		glm::mat4 view = glm::lookAt(camVec, targetPos, glm::vec3(0, 1, 0));
 
 		// --- 右クリックでメニューを開く ---
 		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS && !io.WantCaptureMouse) {
@@ -227,8 +261,8 @@ int main()
 			//メニュー表示計算
 			double x, y;//メニューの座標(x,y)
 			glfwGetCursorPos(window, &x, &y);//カーソルの位置を取得
-			Vector3 rayDir = calculateRayFromPixel(x, y, window, projection, view);//
-			Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);//カメラの位置ベクトル
+			Vector3 rayDir = calculateRayFromPixel(x, y,projection, view);//
+			
 
 			float dist = 5.0f;                            // カメラから5m先に設置
 			spawnPos = camVec + (rayDir * dist);          //空間内の配置座標を計算
@@ -249,7 +283,7 @@ int main()
 			}
 
 			ImGui::Text("--- Add Object ---");
-			if (ImGui::MenuItem("Cube")) { /* 生成処理 */ }
+			if (ImGui::MenuItem("Cube")) { worldObjects.push_back(GameObject("Cube", Vector3(0, 0, 0))); }
 			if (ImGui::MenuItem("Sphere")) { /* 生成処理 */ }
 
 			ImGui::EndPopup();
@@ -257,22 +291,23 @@ int main()
 
 		ImGuiIO& io = ImGui::GetIO();
 		bool currentLeftState = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+
 		//  左ボタンが押されている間
 		if (currentLeftState && !lastLeftState) {
 
-			// 1. まず「今、UI（アウトライナーなど）を触っているか」をチェック
-			if (io.WantCaptureMouse) {
-				// UI側の Selectable などが ImGui 内部で処理されるので、
-				// ここでは 3D 空間のピッキング処理（selected = -1 など）は何もしない！
-			}
+			// UIを触っているかをチェック
+			if (io.WantCaptureMouse) {}
 			else {
 				// 2. UIを触っていない場合のみ、3D空間の物体を探しに行く
 				double xpos, ypos;
 				glfwGetCursorPos(window, &xpos, &ypos);
-
+				/*
+				int windowWidth, windowHeight;
+				glfwGetWindowSize(window, &windowWidth, &windowHeight);
+				glfwGetCursorPos(window, &xpos, &ypos);*/
 				// ※Viewportをずらしている場合は xpos - sidebarWidth を使う
-				glm::vec3 rayDir = calculateRayFromPixel(xpos - 350, ypos, window, projection, view);
-				glm::vec3 camVec = glm::vec3(camPos[0], camPos[1], camPos[2]);
+				glm::vec3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
+				
 
 				int hitIndex = -1;
 				float closestDist = 100000.0f;
@@ -309,11 +344,10 @@ int main()
 				glfwGetCursorPos(window, &xpos, &ypos);
 
 				// カメラからの距離を保ったまま移動させる
-				Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);
 				float currentDist = glm::distance(camVec, worldObjects[selected].position);
 
 				// 現在のマウス位置から新しいレイを計算
-				Vector3 rayDir = calculateRayFromPixel(xpos, ypos, window, projection, view);
+				Vector3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
 
 				// 物体の位置を更新： カメラ位置 + (向き * 元の距離)
 				worldObjects[selected].position = camVec + (rayDir * currentDist);
@@ -332,6 +366,8 @@ int main()
 			worldObjects[selected].position.y = round(worldObjects[selected].position.y / snapValue) * snapValue;
 			worldObjects[selected].position.z = round(worldObjects[selected].position.z / snapValue) * snapValue;
 		}
+		//tagの更新
+		Tagsystem::Update(worldObjects);
 		// --- 描画の準備  ---
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // 背景色を固定
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -348,6 +384,12 @@ int main()
 		// カメラ・プロジェクション行列を先に転送
 		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+		
+		// グリッドの描画
+		glm::mat4 identity = glm::mat4(1.0f);
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(identity));
+		glUniform4f(vertexColorLocation, 0.4f, 0.4f, 0.4f, 1.0f);//グリッドの色を固定
+		DrawGrid(ourShader, myMesh);
 
 		//オブジェクトの描画ループ
 		for (int i = 0; i < worldObjects.size(); i++) {
@@ -379,6 +421,7 @@ int main()
 			}
 			myMesh.Draw(ourShader);
 		}
+		
 
 		// --- ImGui を画面に反映させる ---
 		ImGui::Render();
