@@ -50,4 +50,4 @@ private:
     }
 };
 
-
+std::vector<InteractionRule> Tagsystem::rules;
