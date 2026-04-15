@@ -4,5 +4,5 @@
 */
 
 #include "Math.h"  //わかりやすく定義されたベクトルや行列の型
-
+#include "EditorUI.h"
 #include "Shader.h"

@@ -5,6 +5,7 @@
 #include "Mesh.h"
 #include "GameObject.h"
 #include "Tagsystem.h"
+#include "src/Core/EditorUI.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
@@ -34,10 +35,25 @@ std::vector<unsigned int> indices = {
 	4, 5, 1, 1, 0, 4  // 下
 };
 
+void processInput(GLFWwindow* window) {
+	// ESCキーが押されたらウィンドウを閉じる
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		glfwSetWindowShouldClose(window, true);
+	}
+
+	// 例：W/A/S/D キーで何かを動かすロジックをここに書くこともできます
+	// if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { ... }
+}
+
+// ゲームオブジェクトのリスト
 std::vector<GameObject> worldObjects;
+std::vector<GameObject> editorBackup; // 停止時に戻すためのバックアップ
 
 int main()
 {
+	//モード管理
+	bool isPlaying = false;
+
 	//------3Dの位置管理----
 	static float position[3] = { 0.0f, 0.0f, 0.0f }; // X, Y, Z の位置
 	static float rotation = 0.0f;                    // 回転角度
@@ -126,7 +142,10 @@ int main()
 	glm::vec3 dragOffset; // クリックした地点と物体中心のズレを保持
 	static int selected = -1; //選択内容のindexを初期化
 	static Vector3 spawnPos;  //メニューを開いたときの座標
-	//Main loop
+	worldObjects.reserve(100);
+
+
+	//--------------------------------メインループ---------------------//
 	while (!glfwWindowShouldClose(window))
 	{
 		//フレームバッファサイズを取得
@@ -148,21 +167,47 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		Tagsystem::ShowImGuiWindow();
+		//入力の受付
+		processInput(window);
+		
+
+		//PIEの状態による処理の分岐
+		if (isPlaying) {
+			Tagsystem::Update(worldObjects);
+		}
+		else {
+
+		}
+		//PIE UI表示
+		ShowMainEditor(isPlaying, worldObjects, editorBackup);
 
 		// 左側：アウトライナー (物体の一覧)
 		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(300, display_h), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(300, display_h* 0.5f), ImGuiCond_Always);
 		ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 		{
 			ImGui::Text("World Hierarchy");
 			ImGui::Separator();
 			for (int i = 0; i < (int)worldObjects.size(); i++) {
-				// 選択状態に応じてハイライトさせる
+				// IDの衝突を避けるために名前+indexをIDにする
+				ImGui::PushID(i);
+
 				bool is_selected = (selected == i);
+				// Selectableでクリック判定とハイライトを同時に行う
 				if (ImGui::Selectable(worldObjects[i].name.c_str(), is_selected)) {
-					selected = i;
+					selected = i; // クリックされたらこのインデックスを選択中にする
 				}
+
+				// UE5のように「右クリックでその場で削除」もできると便利
+				if (ImGui::BeginPopupContextItem()) {
+					if (ImGui::MenuItem("Delete Object")) {
+						worldObjects.erase(worldObjects.begin() + i);
+						if (selected == i) selected = -1;
+					}
+					ImGui::EndPopup();
+				}
+
+				ImGui::PopID();
 			}
 
 			ImGui::Separator();
@@ -180,6 +225,7 @@ int main()
 		{
 			if (selected != -1) {
 				GameObject& obj = worldObjects[selected];
+				ShowDetails(obj);
 				ImGui::Text("Name: %s", obj.name.c_str());
 				ImGui::DragFloat3("Location", &obj.position.x, 0.1f);
 				ImGui::DragFloat3("Rotation", &obj.rotation.x, 1.0f);
@@ -213,12 +259,6 @@ int main()
 		front.y = sin(glm::radians(pitch));
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		Vector3 cameraFront = glm::normalize(front);
-
-		/*Matrix4 view = glm::lookAt(
-			Vector3(camPos[0], camPos[1], camPos[2]),
-			Vector3(camPos[0], camPos[1], camPos[2]) + cameraFront,
-			Vector3(0.0f, 1.0f, 0.0f)
-		);*/
 
 		Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);
 		glm::vec3 targetPos = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -303,10 +343,6 @@ int main()
 				// 2. UIを触っていない場合のみ、3D空間の物体を探しに行く
 				double xpos, ypos;
 				glfwGetCursorPos(window, &xpos, &ypos);
-				/*
-				int windowWidth, windowHeight;
-				glfwGetWindowSize(window, &windowWidth, &windowHeight);
-				glfwGetCursorPos(window, &xpos, &ypos);*/
 				// ※Viewportをずらしている場合は xpos - sidebarWidth を使う
 				glm::vec3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
 				
@@ -370,6 +406,11 @@ int main()
 		}
 		//tagの更新
 		Tagsystem::Update(worldObjects);
+		Tagsystem::ShowImGuiWindow();
+
+		if (selected != -1 && selected < (int)worldObjects.size()) {
+			ShowDetails(worldObjects[0]);
+		}
 		// --- 描画の準備  ---
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // 背景色を固定
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -427,6 +468,7 @@ int main()
 
 		// --- ImGui を画面に反映させる ---
 		ImGui::Render();
+		
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);

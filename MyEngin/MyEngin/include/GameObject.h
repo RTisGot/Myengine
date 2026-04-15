@@ -6,12 +6,13 @@
 #include <string>
 #include <vector>
 
+// ゲームオブジェクトの構造体
 struct GameObject {
     std::string name;
-    glm::vec3 position;
+	glm::vec3 position; // X, Y, Z軸の位置を管理
     glm::vec3 rotation; // X, Y, Z軸それぞれの回転を管理できるようにvec3に
     glm::vec3 scale;    // 縦横高さバラバラに変えられるようにvec3に
-    std::set<std::string> tags; // タグを文字列で保持(std::set 二重を防ぐ)
+    std::set<std::string> tags; // タグを文字列で保持(std::set 同じタグを防ぐ)
     float color[3];
 
     //------tagに対しての関数---
@@ -35,6 +36,7 @@ struct GameObject {
         return model;//ローカル変数を返す
     }
 };
+
 inline glm::vec3 calculateRayFromPixel(double xpos, double ypos, const glm::mat4& projection, const glm::mat4& view) {
     // 1. 現在の Viewport 設定 (x, y, width, height) を取得
     // これにより、glViewport(350, 0, width-350, height) の値が自動的に取れる
@@ -71,3 +73,40 @@ bool rayIntersectsSphere(glm::vec3 origin, glm::vec3 dir, glm::vec3 center, floa
     distance = tca - thc;
     return true;
 }
+
+void ShowDetails(GameObject& obj) {
+    //------名前の編集-----
+    char nameBuf[128];
+    size_t copied = obj.name.copy(nameBuf, sizeof(nameBuf) - 1);
+    nameBuf[copied] = '\0';
+
+    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf)))
+    {
+        obj.name = nameBuf; //エディタ上で名前の変更
+    }
+
+    ImGui::Separator();
+
+    //----タグの表示と削除----
+    ImGui::Text("Tags:");
+    std::string tagToDelete = "";
+    for (const auto& tag : obj.tags) {
+        // タグごとに「消去ボタン」と「タグ名」を横並びにする
+        ImGui::PushID(tag.c_str()); // 名前衝突を避けるためのID
+        if (ImGui::Button("x")) { tagToDelete = tag; }
+        ImGui::SameLine();
+        ImGui::TextUnformatted(tag.c_str());
+        ImGui::PopID();
+    }
+    if (tagToDelete != "") obj.removeTag(tagToDelete);
+    static char newTagBuf[64] = "";
+    ImGui::InputText("##NewTagInput", newTagBuf, sizeof(newTagBuf));
+    ImGui::SameLine();
+    if (ImGui::Button("Add Tag")) {
+        if (strlen(newTagBuf) > 0) {
+            obj.addTag(newTagBuf);
+            newTagBuf[0] = '\0'; // 入力欄をクリア
+        }
+    }
+}
+
