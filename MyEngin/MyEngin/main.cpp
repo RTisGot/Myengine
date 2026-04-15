@@ -5,7 +5,7 @@
 #include "Mesh.h"
 #include "GameObject.h"
 #include "Tagsystem.h"
-#include "src/Core/EditorUI.h"
+#include "Core/EditorUI.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
@@ -179,44 +179,9 @@ int main()
 
 		}
 		//PIE UI表示
-		ShowMainEditor(isPlaying, worldObjects, editorBackup);
+		EditorUI::ShowMainEditor(isPlaying, worldObjects, editorBackup);
 
-		// 左側：アウトライナー (物体の一覧)
-		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(300, display_h* 0.5f), ImGuiCond_Always);
-		ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-		{
-			ImGui::Text("World Hierarchy");
-			ImGui::Separator();
-			for (int i = 0; i < (int)worldObjects.size(); i++) {
-				// IDの衝突を避けるために名前+indexをIDにする
-				ImGui::PushID(i);
-
-				bool is_selected = (selected == i);
-				// Selectableでクリック判定とハイライトを同時に行う
-				if (ImGui::Selectable(worldObjects[i].name.c_str(), is_selected)) {
-					selected = i; // クリックされたらこのインデックスを選択中にする
-				}
-
-				// UE5のように「右クリックでその場で削除」もできると便利
-				if (ImGui::BeginPopupContextItem()) {
-					if (ImGui::MenuItem("Delete Object")) {
-						worldObjects.erase(worldObjects.begin() + i);
-						if (selected == i) selected = -1;
-					}
-					ImGui::EndPopup();
-				}
-
-				ImGui::PopID();
-			}
-
-			ImGui::Separator();
-			if (ImGui::Button("Add Cube")) {
-				worldObjects.push_back(GameObject("Cube", glm::vec3(0, 0, 0)));
-			}
-		}
-		ImGui::End();
-
+		
 		// 右側トランスフォーム詳細
 		// ※今回は左側の下半分に配置する例
 		ImGui::SetNextWindowPos(ImVec2(0, display_h * 0.5f), ImGuiCond_Always);
@@ -408,9 +373,9 @@ int main()
 		Tagsystem::Update(worldObjects);
 		Tagsystem::ShowImGuiWindow();
 
-		if (selected != -1 && selected < (int)worldObjects.size()) {
+		/*if (selected != -1 && selected < (int)worldObjects.size()) {
 			ShowDetails(worldObjects[0]);
-		}
+		}*/
 		// --- 描画の準備  ---
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // 背景色を固定
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

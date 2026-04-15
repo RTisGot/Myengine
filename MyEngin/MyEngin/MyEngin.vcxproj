@@ -136,7 +136,9 @@
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\EditorUI.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
+    <ClCompile Include="src\Movement.cpp" />
     <ClCompile Include="src\Shader.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -152,10 +154,12 @@
     <ClInclude Include="include\GameObject.h" />
     <ClInclude Include="include\Mesh.h" />
     <ClInclude Include="include\Model.h" />
+    <ClInclude Include="include\MoveComponent.h" />
     <ClInclude Include="include\MyEngine.h" />
     <ClInclude Include="include\Shader.h" />
     <ClInclude Include="include\TagInteractionRules.h" />
     <ClInclude Include="include\Tagsystem.h" />
+    <ClInclude Include="src\Core\Component.h" />
     <ClInclude Include="src\Core\EditorUI.h" />
     <ClInclude Include="src\Core\Math.h" />
   </ItemGroup>

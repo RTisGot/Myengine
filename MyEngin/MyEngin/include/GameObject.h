@@ -4,14 +4,19 @@
 #include <GLFW/glfw3.h>
 #include <set>
 #include <string>
+#include <memory>
 #include <vector>
+#include "MyEngine.h"
+#include "Core/Component.h"
 
+class Component;
 // ゲームオブジェクトの構造体
 struct GameObject {
     std::string name;
 	glm::vec3 position; // X, Y, Z軸の位置を管理
     glm::vec3 rotation; // X, Y, Z軸それぞれの回転を管理できるようにvec3に
     glm::vec3 scale;    // 縦横高さバラバラに変えられるようにvec3に
+   // std::vector<Component*> components; 
     std::set<std::string> tags; // タグを文字列で保持(std::set 同じタグを防ぐ)
     float color[3];
 
@@ -19,6 +24,23 @@ struct GameObject {
     void addTag(const std::string& t) { tags.insert(t); }                  //Tad追加
 	void removeTag(const std::string& t) { tags.erase(t); }                //Tag削除
 	bool hasTag(const std::string& t) const { return tags.count(t) > 0; }  //Tagの有無確認
+
+    std::vector<std::shared_ptr<Component>> components;
+	//コンポネントを追加する関数
+   template<typename T>
+    void AddComponent(std::shared_ptr<Component> comp) {
+        if (comp) {
+            comp->owner = this; // GameObject* を渡す
+            components.push_back(comp);
+            comp->BeginPlay();
+        }
+    }
+
+    void Update(float dt) {
+        for (auto& comp : components) {
+            comp->Update(dt);
+        }
+    }
 
     GameObject(std::string n, glm::vec3 p)
         : name(n), position(p), rotation(0.0f), scale(1.0f) {
@@ -63,7 +85,7 @@ inline glm::vec3 calculateRayFromPixel(double xpos, double ypos, const glm::mat4
     return glm::normalize(glm::vec3(worldPos) / worldPos.w - cameraPos);
 }
 
-bool rayIntersectsSphere(glm::vec3 origin, glm::vec3 dir, glm::vec3 center, float radius, float& distance) {
+inline bool rayIntersectsSphere(glm::vec3 origin, glm::vec3 dir, glm::vec3 center, float radius, float& distance) {
     glm::vec3 L = center - origin;
     float tca = glm::dot(L, dir);
     if (tca < 0) return false;
@@ -74,7 +96,7 @@ bool rayIntersectsSphere(glm::vec3 origin, glm::vec3 dir, glm::vec3 center, floa
     return true;
 }
 
-void ShowDetails(GameObject& obj) {
+inline void ShowDetails(GameObject& obj) {
     //------名前の編集-----
     char nameBuf[128];
     size_t copied = obj.name.copy(nameBuf, sizeof(nameBuf) - 1);
