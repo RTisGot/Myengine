@@ -15,7 +15,7 @@ public:
     void BeginPlay() override;
 
     // Update ‚Í 1 ‚Â‚É‚Ü‚Æ‚ß‚Ü‚·
-    void Update(float dt) override;
+    void Update(float dt, GLFWwindow* window) override;
 
     // OnGui ‚à 1 ‚Â‚É‚Ü‚Æ‚ß‚Ü‚·
     void OnGui() override;

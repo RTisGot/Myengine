@@ -41,8 +41,7 @@ void processInput(GLFWwindow* window) {
 		glfwSetWindowShouldClose(window, true);
 	}
 
-	// 例：W/A/S/D キーで何かを動かすロジックをここに書くこともできます
-	// if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { ... }
+	
 }
 
 // ゲームオブジェクトのリスト
@@ -126,7 +125,6 @@ int main()
 	Mesh myMesh(vertices, indices);
 	
 
-
 	static float yaw = -90.0f; // 左右の向き
 	static float pitch = 0.0f; // 上下の向き
 	float radius = 5.0f;
@@ -144,7 +142,7 @@ int main()
 	static Vector3 spawnPos;  //メニューを開いたときの座標
 	worldObjects.reserve(100);
 
-
+	
 	//--------------------------------メインループ---------------------//
 	while (!glfwWindowShouldClose(window))
 	{
@@ -373,9 +371,7 @@ int main()
 		Tagsystem::Update(worldObjects);
 		Tagsystem::ShowImGuiWindow();
 
-		/*if (selected != -1 && selected < (int)worldObjects.size()) {
-			ShowDetails(worldObjects[0]);
-		}*/
+		
 		// --- 描画の準備  ---
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // 背景色を固定
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

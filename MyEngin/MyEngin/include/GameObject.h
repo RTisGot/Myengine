@@ -16,6 +16,7 @@ struct GameObject {
 	glm::vec3 position; // X, Y, Z軸の位置を管理
     glm::vec3 rotation; // X, Y, Z軸それぞれの回転を管理できるようにvec3に
     glm::vec3 scale;    // 縦横高さバラバラに変えられるようにvec3に
+
    // std::vector<Component*> components; 
     std::set<std::string> tags; // タグを文字列で保持(std::set 同じタグを防ぐ)
     float color[3];
@@ -27,18 +28,21 @@ struct GameObject {
 
     std::vector<std::shared_ptr<Component>> components;
 	//コンポネントを追加する関数
-   template<typename T>
+   //template<typename T>
     void AddComponent(std::shared_ptr<Component> comp) {
-        if (comp) {
-            comp->owner = this; // GameObject* を渡す
+        printf("Debug: AddComponent Start\n");
+        if (!comp)return;               //compがnullptrなら何もしない
+            comp->owner = this;         // GameObject* を渡す
+            printf("Debug: Owner Set OK\n");
             components.push_back(comp);
             comp->BeginPlay();
-        }
+            printf("Debug: BeginPlay OK\n");
+        
     }
 
-    void Update(float dt) {
+    void Update(float dt, GLFWwindow* window) {
         for (auto& comp : components) {
-            comp->Update(dt);
+            comp->Update(dt, window);
         }
     }
 

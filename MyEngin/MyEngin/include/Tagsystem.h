@@ -50,7 +50,7 @@ public:
             
             if (selectedAction == 0) {
                 newRule.action = [](GameObject& a, GameObject& b) {
-                    std::cout << "規則発動: オブジェクトを破棄!" << std::endl;
+                    std::cout << "オブジェクトを破棄!" << std::endl;
                     };
             }
             else if (selectedAction == 1){

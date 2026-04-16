@@ -3,16 +3,14 @@
 #include "../imgui/imgui.h"
 
 void MoveComponent::BeginPlay()  {
-    // 初期化が必要ならここに書く
 }
 
-// Update は 1 つにまとめます
-void MoveComponent::Update(float dt)  {
-    extern GLFWwindow* window;
 
-    // owner が存在するかチェックしてからアクセス（安全のため）
+void MoveComponent::Update(float dt, GLFWwindow* window)  {
+    // owner が存在するかチェック
     if (!owner) return;
-
+    
+    if (!window)return;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) owner->position.z -= speed;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) owner->position.z += speed;
 
@@ -20,7 +18,6 @@ void MoveComponent::Update(float dt)  {
     owner->position.x += speed * dt;
 }
 
-// OnGui も 1 つにまとめます
 void MoveComponent::OnGui()  {
     if (ImGui::CollapsingHeader("Move Component", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat("Speed", &speed, 0.001f, 0.0f, 1.0f);

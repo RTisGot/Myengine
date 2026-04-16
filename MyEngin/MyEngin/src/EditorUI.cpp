@@ -53,7 +53,7 @@ void EditorUI::ShowOutliner(std::vector<GameObject>& worldObjects, int& selected
                 focusedObject = &worldObjects[i]; // このオブジェクトを「詳細画面」の対象にする
             }
 
-            // 右クリック削除メニュー（ここも cpp に集約！）
+            // 右クリック削除メニュー
             if (ImGui::BeginPopupContextItem()) {
                 if (ImGui::MenuItem("Delete Object")) {
                     worldObjects.erase(worldObjects.begin() + i);
@@ -77,7 +77,7 @@ void EditorUI::ShowOutliner(std::vector<GameObject>& worldObjects, int& selected
 void EditorUI::ShowDetailsWindow() {
     if (!focusedObject) return; // 何もフォーカスされていなければ表示しない
 
-    // UE5のような詳細ウィンドウ（名前を変えたりコンポーネントを足したり）
+    // 詳細ウィンドウ
     ImGui::Begin("Details Panel", nullptr);
     {
         ImGui::Text("Editing: %s", focusedObject->name.c_str());
@@ -93,7 +93,7 @@ void EditorUI::ShowDetailsWindow() {
         // 座標編集
         ImGui::DragFloat3("Position", &focusedObject->position.x, 0.1f);
 
-        ImGui::Separator();
+        ImGui::Separator();//表示分割
         ImGui::Text("Components");
         if (ImGui::Button("Add Component")) {
             ImGui::OpenPopup("ComponentMenu");
@@ -101,13 +101,16 @@ void EditorUI::ShowDetailsWindow() {
 
         if (ImGui::BeginPopup("ComponentMenu")) {
             if (ImGui::MenuItem("Move Component")) {
-                focusedObject->AddComponent(std::make_shared<MoveComponent>());
+				if (focusedObject != nullptr) {   //focusedObjectがnullptrでないことを確認
+                    focusedObject->AddComponent(std::make_shared<MoveComponent>());
+                }
+
             }
             if (ImGui::MenuItem("Physics Component")) {
-                // ... 他のコンポーネント
+               
             }
         }
-        // 先ほど作ったコンポーネントのUIを表示
+        // コンポーネントのUIを表示
         for (auto comp : focusedObject->components) {
             comp->OnGui();
         }
