@@ -6,6 +6,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <cstdio>
 #include "MyEngine.h"
 #include "Core/Component.h"
 
@@ -44,6 +45,20 @@ struct GameObject {
         for (auto& comp : components) {
             comp->Update(dt, window);
         }
+    }
+
+    template<typename T>
+    std::shared_ptr<T> GetComponent() const {
+        for (const auto& comp : components) {
+            auto casted = std::dynamic_pointer_cast<T>(comp);
+            if (casted) return casted;
+        }
+        return nullptr;
+    }
+
+    template<typename T>
+    bool HasComponent() const {
+        return GetComponent<T>() != nullptr;
     }
 
     GameObject(std::string n, glm::vec3 p)

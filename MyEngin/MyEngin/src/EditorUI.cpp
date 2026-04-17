@@ -2,63 +2,90 @@
 #include "MyEngine.h"
 #include "GameObject.h"
 #include "MoveComponent.h"
+#include "PlayerComponent.h"
 
-GameObject* EditorUI::focusedObject = nullptr;
+int EditorUI::selectedIndex = -1;
+int EditorUI::focusedIndex = -1;
+std::vector<std::string> EditorUI::outputLogs;
+
+void EditorUI::PushLog(const std::string& message, bool isError) {
+    const std::string prefix = isError ? "[Error] " : "[Info] ";
+    const std::string line = prefix + message;
+    if (!outputLogs.empty() && outputLogs.back() == line) {
+        return;
+    }
+    outputLogs.push_back(line);
+    if (outputLogs.size() > 120) {
+        outputLogs.erase(outputLogs.begin());
+    }
+}
 void EditorUI::ShowMainEditor(bool& isPlaying, std::vector<GameObject>& worldObjects, std::vector<GameObject>& backup) {
 	ShowToolbar(isPlaying, worldObjects, backup);
-	static int selected = -1; //選択内容のindexを初期化
-	ShowOutliner(worldObjects, selected);
-    ShowDetailsWindow();
+	ShowOutliner(worldObjects);
+    ShowDetailsWindow(worldObjects);
+    ShowOutputLog();
 }
 
 void EditorUI::ShowToolbar(bool& isPlaying, std::vector<GameObject>& worldObjects, std::vector<GameObject>& backup) {
-	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display.x, kTopBarHeight), ImGuiCond_Always);
+	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 	{
 		if (isPlaying) {
 			if (ImGui::Button("Stop")) {
 				isPlaying = false;
-				worldObjects = backup; // バックアップから元に戻す
+				worldObjects = backup; // ?o?b?N?A?b?v????????
 			}
 		}
 		else {
 			if (ImGui::Button("Play")) {
 				isPlaying = true;
-				backup = worldObjects; // 現在の状態をバックアップ
+				backup = worldObjects; // ?????????o?b?N?A?b?v
 			}
 		}
+        ImGui::SameLine();
+        ImGui::TextUnformatted("|");
+        ImGui::SameLine();
+        ImGui::Text("Objects: %d", (int)worldObjects.size());
 	}
 	ImGui::End();
 }
 
-void EditorUI::ShowOutliner(std::vector<GameObject>& worldObjects, int& selectedIdx) {
-    // 位置やサイズを main からこちらに移動
-    ImGui::SetNextWindowPos(ImVec2(0, 50), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_Always);
+void EditorUI::ShowOutliner(std::vector<GameObject>& worldObjects) {
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    const float outlinerHeight = display.y - kTopBarHeight - kBottomPanelHeight;
+    ImGui::SetNextWindowPos(ImVec2(0.0f, kTopBarHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(kLeftPanelWidth, outlinerHeight), ImGuiCond_Always);
 
-    ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+    ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
     {
         ImGui::Text("World Hierarchy");
         ImGui::Separator();
 
         for (int i = 0; i < (int)worldObjects.size(); i++) {
             ImGui::PushID(i);
-            bool is_selected = (selectedIdx == i);
-            //一回Click
+            bool is_selected = (selectedIndex == i);
+            //???Click
             if (ImGui::Selectable(worldObjects[i].name.c_str(), is_selected)) {
-                selectedIdx = i;
+                selectedIndex = i;
+                focusedIndex = i;
             }
 
-            //ダブルクリック判定
+            //?_?u???N???b?N????
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                focusedObject = &worldObjects[i]; // このオブジェクトを「詳細画面」の対象にする
+                focusedIndex = i; // ????I?u?W?F?N?g???u?????v????????
             }
 
-            // 右クリック削除メニュー
+            // ?E?N???b?N?????j???[
             if (ImGui::BeginPopupContextItem()) {
                 if (ImGui::MenuItem("Delete Object")) {
                     worldObjects.erase(worldObjects.begin() + i);
-                    if (selectedIdx == i) selectedIdx = -1;
-                    i--; // 要素を消したので index を調整
+                    if (selectedIndex == i) selectedIndex = -1;
+                    if (focusedIndex == i) focusedIndex = -1;
+                    if (selectedIndex > i) selectedIndex--;
+                    if (focusedIndex > i) focusedIndex--;
+                    i--; // ?v?f??????????? index ???
                 }
                 ImGui::EndPopup();
             }
@@ -68,32 +95,45 @@ void EditorUI::ShowOutliner(std::vector<GameObject>& worldObjects, int& selected
         ImGui::Separator();
         if (ImGui::Button("Add Cube")) {
             worldObjects.push_back(GameObject("New Cube", glm::vec3(0, 0, 0)));
+            selectedIndex = (int)worldObjects.size() - 1;
+            focusedIndex = selectedIndex;
         }
     }
 	ImGui::End();
 }
 
-// 選択されたオブジェクトの詳細を表示するウィンドウを作る
-void EditorUI::ShowDetailsWindow() {
-    if (!focusedObject) return; // 何もフォーカスされていなければ表示しない
+// ?I???????I?u?W?F?N?g?????\??????E?B???h?E?????
+void EditorUI::ShowDetailsWindow(std::vector<GameObject>& worldObjects) {
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    const float panelHeight = display.y - kTopBarHeight;
+    ImGui::SetNextWindowPos(ImVec2(display.x - kRightPanelWidth, kTopBarHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(kRightPanelWidth, panelHeight), ImGuiCond_Always);
+    ImGui::Begin("Details", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-    // 詳細ウィンドウ
-    ImGui::Begin("Details Panel", nullptr);
+    if (focusedIndex < 0 || focusedIndex >= (int)worldObjects.size()) {
+        ImGui::TextUnformatted("Select an object from Outliner.");
+        ImGui::End();
+        return;
+    }
+
+    GameObject& focusedObject = worldObjects[focusedIndex];
     {
-        ImGui::Text("Editing: %s", focusedObject->name.c_str());
+        ImGui::Text("Editing: %s", focusedObject.name.c_str());
         ImGui::Separator();
 
-        // 名前変更
+        // ???O??X
         char buf[64];
-        strcpy_s(buf, focusedObject->name.c_str());
+        strcpy_s(buf, focusedObject.name.c_str());
         if (ImGui::InputText("Object Name", buf, 64)) {
-            focusedObject->name = buf;
+            focusedObject.name = buf;
         }
 
-        // 座標編集
-        ImGui::DragFloat3("Position", &focusedObject->position.x, 0.1f);
+        // ???W??W
+        ImGui::DragFloat3("Position", &focusedObject.position.x, 0.1f);
+        ImGui::DragFloat3("Rotation", &focusedObject.rotation.x, 1.0f);
+        ImGui::DragFloat3("Scale", &focusedObject.scale.x, 0.1f);
 
-        ImGui::Separator();//表示分割
+        ImGui::Separator();//?\??????
         ImGui::Text("Components");
         if (ImGui::Button("Add Component")) {
             ImGui::OpenPopup("ComponentMenu");
@@ -101,22 +141,47 @@ void EditorUI::ShowDetailsWindow() {
 
         if (ImGui::BeginPopup("ComponentMenu")) {
             if (ImGui::MenuItem("Move Component")) {
-				if (focusedObject != nullptr) {   //focusedObjectがnullptrでないことを確認
-                    focusedObject->AddComponent(std::make_shared<MoveComponent>());
-                }
-
+                focusedObject.AddComponent(std::make_shared<MoveComponent>());
+                PushLog("MoveComponent added to " + focusedObject.name + ".");
+            }
+            if (ImGui::MenuItem("Player Component")) {
+                focusedObject.AddComponent(std::make_shared<PlayerComponent>());
+                PushLog("PlayerComponent added to " + focusedObject.name + ".");
             }
             if (ImGui::MenuItem("Physics Component")) {
                
             }
+            ImGui::EndPopup();
         }
-        // コンポーネントのUIを表示
-        for (auto comp : focusedObject->components) {
+        // ?R???|?[?l???g??UI??\??
+        for (const auto& comp : focusedObject.components) {
             comp->OnGui();
         }
 
-        if (ImGui::Button("Close Details")) {
-            focusedObject = nullptr; // 閉じるときの処理
+        if (ImGui::Button("Clear Selection")) {
+            focusedIndex = -1;
+            selectedIndex = -1;
+        }
+    }
+    ImGui::End();
+}
+
+void EditorUI::ShowOutputLog() {
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(0.0f, display.y - kBottomPanelHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(kLeftPanelWidth, kBottomPanelHeight), ImGuiCond_Always);
+    ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+    if (ImGui::Button("Clear")) {
+        outputLogs.clear();
+    }
+    ImGui::Separator();
+    if (outputLogs.empty()) {
+        ImGui::TextUnformatted("[Info] Ready.");
+    }
+    else {
+        for (const std::string& line : outputLogs) {
+            ImVec4 color = (line.find("[Error]") == 0) ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f) : ImVec4(0.8f, 0.9f, 1.0f, 1.0f);
+            ImGui::TextColored(color, "%s", line.c_str());
         }
     }
     ImGui::End();

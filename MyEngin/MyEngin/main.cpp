@@ -6,6 +6,7 @@
 #include "GameObject.h"
 #include "Tagsystem.h"
 #include "Core/EditorUI.h"
+#include "PlayerComponent.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
@@ -14,9 +15,9 @@
 #include<vector>
 #include <iostream>
 
-glm::mat4 modelMatrix = (1.f);         //単位行列で初期化
+glm::mat4 modelMatrix = (1.f);         //行列の初期化
 
-const GLint WIDTH = 800, HEIGHT = 600;//ウィンドウの幅と高さ
+const GLint WIDTH = 800, HEIGHT = 600;//ウィンドウサイズ
 
 std::vector<Vertex> vertices = {
 	// 前面
@@ -27,37 +28,35 @@ std::vector<Vertex> vertices = {
 
 // インデックス
 std::vector<unsigned int> indices = {
-	0, 1, 2, 2, 3, 0, // 前
-	1, 5, 6, 6, 2, 1, // 右
-	7, 6, 5, 5, 4, 7, // 後
-	4, 0, 3, 3, 7, 4, // 左
-	3, 2, 6, 6, 7, 3, // 上
-	4, 5, 1, 1, 0, 4  // 下
+	0, 1, 2, 2, 3, 0, // ?O
+	1, 5, 6, 6, 2, 1, // ?E
+	7, 6, 5, 5, 4, 7, // ??
+	4, 0, 3, 3, 7, 4, // ??
+	3, 2, 6, 6, 7, 3, // ??
+	4, 5, 1, 1, 0, 4  // ??
 };
 
 void processInput(GLFWwindow* window) {
-	// ESCキーが押されたらウィンドウを閉じる
+	// ESCでゲームウィンドウを閉じる
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
-
-	
 }
 
-// ゲームオブジェクトのリスト
+// 
 std::vector<GameObject> worldObjects;
-std::vector<GameObject> editorBackup; // 停止時に戻すためのバックアップ
+std::vector<GameObject> editorBackup; // 
 
 int main()
 {
-	//モード管理
+	//実行状態を管理するフラグ(Editorの実行フラグ)
 	bool isPlaying = false;
 
-	//------3Dの位置管理----
-	static float position[3] = { 0.0f, 0.0f, 0.0f }; // X, Y, Z の位置
-	static float rotation = 0.0f;                    // 回転角度
-	static float scale = 1.0f;                       // 大きさ
-	//windowの初期化
+	//------3D変換----
+	static float position[3] = { 0.0f, 0.0f, 0.0f }; // X, Y, Z 位置
+	static float rotation = 0.0f;                    // 回転角
+	static float scale = 1.0f;                       // スケール
+	//window初期化
 	if (!glfwInit())
 	{
 		std::cout << "GLFW is faild Initialize!" << "/n";
@@ -72,11 +71,11 @@ int main()
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	
 
-	// モニター情報の取得
+	// ???j?^?[??????
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-	// フルスクリーンウィンドウの作成
+	// ?t???X?N???[???E?B???h?E???
 	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "My Engine", monitor, NULL);
 
 	if (!window)
@@ -95,7 +94,7 @@ int main()
 
 	glewExperimental = GL_TRUE;
 
-	//glewの初期化
+	//glew???????
 	if (glewInit() != GLEW_OK)
 	{
 		std::cout << "Failed to initialize GLEW!" << "\n";
@@ -105,118 +104,98 @@ int main()
 		return 1;
 	}
 
-	//深度テストを有効にする
+	//?[?x?e?X?g??L???????
 	glEnable(GL_DEPTH_TEST);
 
-	// 1. ImGui コンテキストの作成
+	// 1. ImGui ?R???e?L?X?g???
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-	// 2. バックエンドの初期化
+	// 2. ?o?b?N?G???h???????
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
 
-	// 3. スタイル見た目の設定
+	// 3. ?X?^?C???????????
 	ImGui::StyleColorsDark(); 
-	// 自作Shaderクラスの作成 
+	// ????Shader?N???X??? 
 	Shader ourShader("shader.vert", "shader.frag");
-	//自作Meshクラスの作成
+	//????Mesh?N???X???
 	Mesh myMesh(vertices, indices);
 	
 
-	static float yaw = -90.0f; // 左右の向き
-	static float pitch = 0.0f; // 上下の向き
+	static float yaw = -90.0f; // ???E?????
+	static float pitch = 0.0f; // ???????
 	float radius = 5.0f;
 	static double lastX = 400, lastY = 300;
 	static bool firstMouse = true;
 
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);//マウスの移動量だけで
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);//?}?E?X???????????
 
   //------------------
-	bool isDragging = false; //objectdragのfalse付与
+	bool isDragging = false; //objectdrag??false?t?^
 	bool lastLeftState = false;
-	float dragDistance = 0.0f; // ドラッグ中の距離を保持する
-	glm::vec3 dragOffset; // クリックした地点と物体中心のズレを保持
-	static int selected = -1; //選択内容のindexを初期化
-	static Vector3 spawnPos;  //メニューを開いたときの座標
+	float dragDistance = 0.0f; // ?h???b?O???????????????
+	glm::vec3 dragOffset; // ?N???b?N?????n?_???????S??Y??????
+	static int selected = -1; //?I????e??index????????
+	static Vector3 spawnPos;  //???j???[???J???????????W
 	worldObjects.reserve(100);
+	double lastFrameTime = glfwGetTime();
 
 	
-	//--------------------------------メインループ---------------------//
+	//--------------------------------???C?????[?v---------------------//
 	while (!glfwWindowShouldClose(window))
 	{
-		//フレームバッファサイズを取得
+		const double currentTime = glfwGetTime();
+		const float dt = static_cast<float>(currentTime - lastFrameTime);
+		lastFrameTime = currentTime;
+
+		//?t???[???o?b?t?@?T?C?Y?????
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 
-		// フレームバッファサイズ取得の直後
-		int sidebarWidth = 300; // 左側のメニュー幅
-		glViewport(sidebarWidth, 0, display_w - sidebarWidth, display_h);
+		// UE5?????C?A?E?g: ??Outliner / ?EDetails / ??Toolbar ????????????3D?`???g??
+		const int leftPanelWidth = (int)EditorUI::kLeftPanelWidth;
+		const int rightPanelWidth = (int)EditorUI::kRightPanelWidth;
+		const int topBarHeight = (int)EditorUI::kTopBarHeight;
+		const int viewportWidth = display_w - leftPanelWidth - rightPanelWidth;
+		const int viewportHeight = display_h - topBarHeight;
+		glViewport(leftPanelWidth, 0, viewportWidth, viewportHeight);
 
-		// アスペクト比もこの新しいサイズに合わせて計算し直す
-		float aspect = (float)(display_w - sidebarWidth) / (float)display_h;
+		// ?A?X?y?N?g???????V?????T?C?Y???????v?Z??????
+		float aspect = (float)viewportWidth / (float)viewportHeight;
 		glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 		//Get and handle user inputs
 		glfwPollEvents();
 
-		// --- ImGui の新しいフレームを開始 ---
+		// --- ImGui ??V?????t???[?????J?n ---
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		//入力の受付
+		//??????t
 		processInput(window);
 		
 
-		//PIEの状態による処理の分岐
+		//PIE???????Y???????
 		if (isPlaying) {
+			for (auto& obj : worldObjects) {
+				obj.Update(dt, window);
+			}
 			Tagsystem::Update(worldObjects);
 		}
 		else {
-
 		}
-		//PIE UI表示
+		//PIE UI?\??
 		EditorUI::ShowMainEditor(isPlaying, worldObjects, editorBackup);
 
-		
-		// 右側トランスフォーム詳細
-		// ※今回は左側の下半分に配置する例
-		ImGui::SetNextWindowPos(ImVec2(0, display_h * 0.5f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(300, display_h * 0.5f), ImGuiCond_Always);
-		ImGui::Begin("Details", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-		{
-			if (selected != -1) {
-				GameObject& obj = worldObjects[selected];
-				ShowDetails(obj);
-				ImGui::Text("Name: %s", obj.name.c_str());
-				ImGui::DragFloat3("Location", &obj.position.x, 0.1f);
-				ImGui::DragFloat3("Rotation", &obj.rotation.x, 1.0f);
-				ImGui::DragFloat3("Scale", &obj.scale.x, 0.1f);
-			}
-			else {
-				ImGui::Text("Select an object to edit.");
-			}
-		}
-		ImGui::End();
+		//--- ?J???????u????????? ---
+		static float camPos[3] = { 0.0f, 0.0f, 3.0f }; // ??????O??z?u
 
-		//  真ん中：エディタ情報
-		ImGui::SetNextWindowPos(ImVec2(310, 10), ImGuiCond_Always);
-		ImGui::Begin("Viewport Info", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs);
-		{
-			ImGui::TextColored(ImVec4(1, 1, 0, 1), "FPS: %.1f", io.Framerate);
-			if (selected != -1) ImGui::Text("Editing: %s", worldObjects[selected].name.c_str());
-		}
-		ImGui::End();
+		//--------- ?s???v?Z (GLM???g?p) ---
+	     Matrix4 model = Matrix4(1.0f); // ?P??s????????
 
-
-		//--- カメラの位置と向きの管理 ---
-		static float camPos[3] = { 0.0f, 0.0f, 3.0f }; // 少し手前に配置
-
-		//--------- 行列の計算 (GLMを使用) ---
-	     Matrix4 model = Matrix4(1.0f); // 単位行列で初期化
-
-		//-------カメラの位置を設定	
+		//-------?J???????u????	
 		Vector3 front;
 		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
 		front.y = sin(glm::radians(pitch));
@@ -226,24 +205,27 @@ int main()
 		Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);
 		glm::vec3 targetPos = glm::vec3(0.0f, 0.0f, 0.0f);
 
-		// 上方向ベクトル
+		// ??????x?N?g??
 		glm::vec3 upVec = glm::vec3(0.0f, 1.0f, 0.0f);
 
 		
-		//カメラの操作
+		// ?J?????????
+		ImGui::SetNextWindowPos(ImVec2((float)leftPanelWidth + 12.0f, EditorUI::kTopBarHeight + 12.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowBgAlpha(0.75f);
 		ImGui::Begin("Camera Editor");
 		ImGui::SliderFloat3("Camera Position", camPos, -10.0f, 10.0f);
+		ImGui::TextColored(ImVec4(1, 1, 0, 1), "FPS: %.1f", io.Framerate);
 		ImGui::End();
 		
-		// 2. カメラ操作ロジック 
+		// 2. ?J?????????W?b?N 
 		if (!io.WantCaptureMouse) {
-			// --- ズーム (ホイール) ---
+			// --- ?Y?[?? (?z?C?[??) ---
 			if (io.MouseWheel != 0.0f) {
 				radius -= io.MouseWheel * 1.0f;
 				if (radius < 0.1f) radius = 0.1f;
 			}
 
-			// --- 回転 (中央クリック) ---
+			// --- ??] (?????N???b?N) ---
 			if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
 				float sensitivity = 0.2f;
 				yaw += io.MouseDelta.x * sensitivity;
@@ -253,30 +235,56 @@ int main()
 			}
 		}
 
-		// 3. ★カメラ座標とView行列を確定させる (これが全ての基準になる)
-		camVec.x = targetPos.x + radius * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
-		camVec.y = targetPos.y + radius * sin(glm::radians(pitch));
-		camVec.z = targetPos.z + radius * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+		// 3. ???J???????W??View?s????m?????? (?????S????????)
+		std::shared_ptr<PlayerComponent> activePlayerComp = nullptr;
+		GameObject* activePlayerObject = nullptr;
+		for (auto& obj : worldObjects) {
+			auto playerComp = obj.GetComponent<PlayerComponent>();
+			if (playerComp) {
+				activePlayerComp = playerComp;
+				activePlayerObject = &obj;
+				break;
+			}
+		}
+
+		if (isPlaying && activePlayerComp && activePlayerObject) {
+			const glm::vec3 forward = glm::normalize(glm::vec3(front.x, front.y, front.z));
+			if (activePlayerComp->viewMode == PlayerComponent::ViewMode::FirstPerson) {
+				camVec = activePlayerObject->position + glm::vec3(0.0f, 1.6f, 0.0f);
+				targetPos = camVec + forward;
+			}
+			else {
+				targetPos = activePlayerObject->position;
+				camVec.x = targetPos.x + radius * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+				camVec.y = targetPos.y + radius * sin(glm::radians(pitch));
+				camVec.z = targetPos.z + radius * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+			}
+		}
+		else {
+			camVec.x = targetPos.x + radius * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+			camVec.y = targetPos.y + radius * sin(glm::radians(pitch));
+			camVec.z = targetPos.z + radius * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+		}
 		glm::mat4 view = glm::lookAt(camVec, targetPos, glm::vec3(0, 1, 0));
 
-		// --- 右クリックでメニューを開く ---
+		// --- ?E?N???b?N????j???[???J?? ---
 		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS && !io.WantCaptureMouse) {
-			ImGui::OpenPopup("ObjectMenu");//オブジェクトメニューのウィンドウを開く
+			ImGui::OpenPopup("ObjectMenu");//?I?u?W?F?N?g???j???[??E?B???h?E???J??
 
-			//メニュー表示計算
-			double x, y;//メニューの座標(x,y)
-			glfwGetCursorPos(window, &x, &y);//カーソルの位置を取得
+			//???j???[?\???v?Z
+			double x, y;//???j???[????W(x,y)
+			glfwGetCursorPos(window, &x, &y);//?J?[?\?????u?????
 			Vector3 rayDir = calculateRayFromPixel(x, y,projection, view);//
 			
 
-			float dist = 5.0f;                            // カメラから5m先に設置
-			spawnPos = camVec + (rayDir * dist);          //空間内の配置座標を計算
-			float snap = 0.5f;                            //スナップ処理
+			float dist = 5.0f;                            // ?J????????5m????u
+			spawnPos = camVec + (rayDir * dist);          //??????z?u???W???v?Z
+			float snap = 0.5f;                            //?X?i?b?v????
 			spawnPos = glm::round(spawnPos / snap) * snap;//
 		}
-		// ImGuiで右クリックメニュー（ポップアップ）を描画
+		// ImGui??E?N???b?N???j???[?i?|?b?v?A?b?v?j??`??
 		if (ImGui::BeginPopup("ObjectMenu")) {
-			// 選択されている物がある場合のみ「削除」を表示
+			// ?I????????????????????u???v??\??
 			if (selected != -1) {
 				ImGui::Text("Selected: %s", worldObjects[selected].name.c_str());
 				if (ImGui::MenuItem("Delete", "Delete Key")) {
@@ -289,7 +297,7 @@ int main()
 
 			ImGui::Text("--- Add Object ---");
 			if (ImGui::MenuItem("Cube")) { worldObjects.push_back(GameObject("Cube", Vector3(0, 0, 0))); }
-			if (ImGui::MenuItem("Sphere")) { /* 生成処理 */ }
+			if (ImGui::MenuItem("Sphere")) { /* ???????? */ }
 
 			ImGui::EndPopup();
 		}
@@ -297,16 +305,16 @@ int main()
 		ImGuiIO& io = ImGui::GetIO();
 		bool currentLeftState = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
 
-		//  左ボタンが押されている間
+		//  ???{?^???????????????
 		if (currentLeftState && !lastLeftState) {
 
-			// UIを触っているかをチェック
+			// UI??G??????????`?F?b?N
 			if (io.WantCaptureMouse) {}
 			else {
-				// 2. UIを触っていない場合のみ、3D空間の物体を探しに行く
+				// 2. UI??G?????????????A3D????????T????s??
 				double xpos, ypos;
 				glfwGetCursorPos(window, &xpos, &ypos);
-				// ※Viewportをずらしている場合は xpos - sidebarWidth を使う
+				// ??Viewport?????????????? xpos - sidebarWidth ???g??
 				glm::vec3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
 				
 
@@ -324,38 +332,38 @@ int main()
 					}
 				}
 
-				// 3. 判定結果の適用
+				// 3. ???????K?p
 				if (hitIndex != -1) {
 					selected = hitIndex;
 					isDragging = true;
 					dragDistance = glm::distance(camVec, worldObjects[selected].position);
 				}
 				else {
-					// 背景をクリックした時だけ解除
+					// ?w?i???N???b?N??????????????
 					selected = -1;
 					isDragging = false;
 				}
 			}
 		}
 
-		// 2. ドラッグ中の処理
+		// 2. ?h???b?O???????
 		if (isDragging && currentLeftState && selected != -1) {
 			if (!io.WantCaptureMouse) {
 				double xpos, ypos;
 				glfwGetCursorPos(window, &xpos, &ypos);
 
-				// カメラからの距離を保ったまま移動させる
+				// ?J?????????????????????????????
 				float currentDist = glm::distance(camVec, worldObjects[selected].position);
 
-				// 現在のマウス位置から新しいレイを計算
+				// ?????}?E?X??u????V???????C???v?Z
 				Vector3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
 
-				// 物体の位置を更新： カメラ位置 + (向き * 元の距離)
+				// ??????u???X?V?F ?J??????u + (???? * ???????)
 				worldObjects[selected].position = camVec + (rayDir * currentDist);
 
-				// スナップ処理（0.5単位に吸着）
+				// ?X?i?b?v?????i0.5?P???z???j
 				float snapValue = 0.5f;
-				worldObjects[selected].position = glm::round(worldObjects[selected].position / snapValue) * snapValue;//0.5刻みにして
+				worldObjects[selected].position = glm::round(worldObjects[selected].position / snapValue) * snapValue;//0.5????????
 			}
 		}
 		
@@ -367,67 +375,67 @@ int main()
 			worldObjects[selected].position.y = round(worldObjects[selected].position.y / snapValue) * snapValue;
 			worldObjects[selected].position.z = round(worldObjects[selected].position.z / snapValue) * snapValue;
 		}
-		//tagの更新
+		//tag??X?V
 		Tagsystem::Update(worldObjects);
 		Tagsystem::ShowImGuiWindow();
 
 		
-		// --- 描画の準備  ---
-		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // 背景色を固定
+		// --- ?`??????  ---
+		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // ?w?i?F?????
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		ourShader.use();
 
 		int colorLoc = glGetUniformLocation(ourShader.ID, "ourColor");
-		// Locationの取得 (描画ループの直前で行う)
+		// Location???? (?`???[?v????O??s??)
 		unsigned int modelLoc = glGetUniformLocation(ourShader.ID, "model");
 		unsigned int viewLoc = glGetUniformLocation(ourShader.ID, "view");
 		unsigned int projLoc = glGetUniformLocation(ourShader.ID, "projection");
 		int vertexColorLocation = glGetUniformLocation(ourShader.ID, "ourColor");
 
-		// カメラ・プロジェクション行列を先に転送
+		// ?J?????E?v???W?F?N?V?????s?????]??
 		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 		
-		// グリッドの描画
+		// ?O???b?h??`??
 		glm::mat4 identity = glm::mat4(1.0f);
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(identity));
-		glUniform4f(vertexColorLocation, 0.4f, 0.4f, 0.4f, 1.0f);//グリッドの色を固定
+		glUniform4f(vertexColorLocation, 0.4f, 0.4f, 0.4f, 1.0f);//?O???b?h??F?????
 		DrawGrid(ourShader, myMesh);
 
-		//オブジェクトの描画ループ
+		//?I?u?W?F?N?g??`???[?v
 		for (int i = 0; i < worldObjects.size(); i++) {
 			glm::mat4 objModel = worldObjects[i].getModelMatrix();
 
-			// 1. 選択されている場合、先に「青い枠」を描画
+			// 1. ?I????????????A???u????g?v??`??
 			if (i == selected) {
-				// 深度テストを一時的にオフにする
+				// ?[?x?e?X?g?????I??I?t?????
 				glDisable(GL_DEPTH_TEST);
 
-				// 1.05倍くらいに拡大したモデル行列を作る
+				// 1.05?{??????g????????f???s??????
 				glm::mat4 outlineModel = glm::scale(objModel, glm::vec3(1.02f));
 				glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(outlineModel));
 
-				// 青色で描画
+				// ??F??`??
 				glUniform4f(vertexColorLocation, 0.0f, 0.5f, 1.0f, 1.0f); 
 				myMesh.Draw(ourShader);
 
-				glEnable(GL_DEPTH_TEST); // 深度テストを戻す
+				glEnable(GL_DEPTH_TEST); // ?[?x?e?X?g????
 			}
 
-			// 2. 本体の描画
+			// 2. ?{???`??
 			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(objModel));
 			if (i == selected) {
-				glUniform4f(vertexColorLocation, 1.0f, 1.0f, 0.0f, 1.0f); // 本体は黄色
+				glUniform4f(vertexColorLocation, 1.0f, 1.0f, 0.0f, 1.0f); // ?{?????F
 			}
 			else {
-				glUniform4f(vertexColorLocation, 1.0f, 0.5f, 0.2f, 1.0f); // 通常色
+				glUniform4f(vertexColorLocation, 1.0f, 0.5f, 0.2f, 1.0f); // ???F
 			}
 			myMesh.Draw(ourShader);
 		}
 		
 
-		// --- ImGui を画面に反映させる ---
+		// --- ImGui ????????f?????? ---
 		ImGui::Render();
 		
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -444,44 +452,44 @@ int main()
 		return 0;
 }
 
-//プログラムオブジェクトを作成する
-//  vsrc:バーテックシェーダーのソースプログラムの文字列
-//  vsrc:フラグメントシェーダーのソースプログラムの文字列
+//?v???O?????I?u?W?F?N?g????????
+//  vsrc:?o?[?e?b?N?V?F?[?_?[??\?[?X?v???O???????????
+//  vsrc:?t???O?????g?V?F?[?_?[??\?[?X?v???O???????????
 GLuint createProgram(const char* vsrc, const char* fsrc)
 {
-	//空のオブジェクトを作成する
+	//???I?u?W?F?N?g????????
 	const GLuint program(glCreateProgram());
 
 	if (vsrc != NULL)
 	{
-		//バーテックスシェーダーのシェイダーオブジェクトを作成
+		//?o?[?e?b?N?X?V?F?[?_?[??V?F?C?_?[?I?u?W?F?N?g????
 		const GLuint vobj(glCreateShader(GL_VERTEX_SHADER));
 		glShaderSource(vobj, 1, &vsrc, NULL);
 		glCompileShader(vobj);
 
-		//バーテックスシェーダーオブジェクトをプロジェクトオブジェクトに読み込む
+		//?o?[?e?b?N?X?V?F?[?_?[?I?u?W?F?N?g???v???W?F?N?g?I?u?W?F?N?g???????
 		glAttachShader(program, vobj);
 		glDeleteShader(vobj);
 	}
 
 	if (fsrc != NULL)
 	{
-		//フラグメントシェーダーのシェーダーオブジェクトを作成する
+		//?t???O?????g?V?F?[?_?[??V?F?[?_?[?I?u?W?F?N?g????????
 		const GLuint fobj(glCreateShader(GL_FRAGMENT_SHADER));
 		glShaderSource(fobj, 1, &fsrc, NULL);
 		glCompileShader(fobj);
 
-		//フラグメントシェーダーのシェーダーオブジェクトをプログラムオブジェクトに組み込む
+		//?t???O?????g?V?F?[?_?[??V?F?[?_?[?I?u?W?F?N?g???v???O?????I?u?W?F?N?g??g?????
 		glAttachShader(program, fobj);
 		glDeleteShader(fobj);
 	}
 
-	//プログラムオブジェクトをリンクする
+	//?v???O?????I?u?W?F?N?g???????N????
 	glBindAttribLocation(program, 0, "position");
 	glBindFragDataLocation(program, 0, "fragment");
 	glLinkProgram(program);
 
-	//作成したプログラムオブジェクトを返す
+	//???????v???O?????I?u?W?F?N?g????
 	return program;
 }
 
