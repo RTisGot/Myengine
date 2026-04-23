@@ -129,10 +129,11 @@ int main()
 		mode->width,    // モニターの横幅
 		mode->height,   // モニターの縦幅
 		"My Engine",    // ウィンドウタイトル
-		monitor,        // 出力先のモニター（NULLならウィンドウモード）
+		NULL,        // 出力先のモニター（NULLならウィンドウモード）
 		NULL            // 共有コンテキスト（通常は使用しない）
 	);
 
+	if (window) glfwSetWindowPos(window, 100, 100);
 	//ウィンドウ生成に失敗した場合の例外処理
 	if (!window)
 	{
@@ -170,33 +171,38 @@ int main()
 		return 1;
 	}
 
-	//?[?x?e?X?g??L???????
+	//深度テスト
 	glEnable(GL_DEPTH_TEST);
 
-	// 1. ImGui ?R???e?L?X?g???
+	// ------------------------------------------------------------------
+	// ImGui 初期設定
+	// ------------------------------------------------------------------
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-	// 2. ?o?b?N?G???h???????
+	// バックエンドの初期化 (GLFW/OpenGL3)
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
 
-	// 3. ?X?^?C???????????
+	//ダークモード
 	ImGui::StyleColorsDark(); 
-	// ????Shader?N???X??? 
+	// GPU側のシェーダーを読み込む 
 	Shader ourShader("shader.vert", "shader.frag");
-	//????Mesh?N???X???
+	//3DモデルデータをGPUメモリに送りこむ
 	Mesh myMesh(vertices, indices);
 	
-
-	static float yaw = -90.0f; // ???E?????
-	static float pitch = 0.0f; // ???????
-	float radius = 5.0f;
+	// ------------------------------------------------------------------
+	// エディタ用カメラ・操作変数
+	// ------------------------------------------------------------------
+	static float yaw = -90.0f;            //横回転
+	static float pitch = 0.0f;            // 縦回転
+	float radius = 5.0f;                  //角度
 	static double lastX = 400, lastY = 300;
 	static bool firstMouse = true;
 
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);//?}?E?X???????????
+	// マウスカーソルを通常表示に設定
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
   //------------------
 	bool isDragging = false;                 //オブジェクトがドラッグされているかどうか
@@ -221,7 +227,7 @@ int main()
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 
-		// UE5?????C?A?E?g: ??Outliner / ?EDetails / ??Toolbar ????????????3D?`???g??
+		
 		const int leftPanelWidth = (int)EditorUI::kLeftPanelWidth;
 		const int rightPanelWidth = (int)EditorUI::kRightPanelWidth;
 		const int topBarHeight = (int)EditorUI::kTopBarHeight;
@@ -229,22 +235,21 @@ int main()
 		const int viewportHeight = display_h - topBarHeight;
 		glViewport(leftPanelWidth, 0, viewportWidth, viewportHeight);
 
-		// ?A?X?y?N?g???????V?????T?C?Y???????v?Z??????
+		// 射影行列の更新
 		float aspect = (float)viewportWidth / (float)viewportHeight;
 		glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-		//Get and handle user inputs
+		
 		glfwPollEvents();
 
-		// --- ImGui ??V?????t???[?????J?n ---
+		// ImGui フレーム開始
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		//??????t
 		processInput(window);
 		
 
-		//PIE???????Y???????
+		// PIE実行中の更新処理
 		if (isPlaying) {
 			for (auto& obj : worldObjects) {
 				obj.Update(dt, window);
@@ -253,18 +258,22 @@ int main()
 		}
 		else {
 		}
-		//PIE UI?\??
+
+		//PIE UI
 		EditorUI::ShowMainEditor(isPlaying, worldObjects, editorBackup);
 
-		//--- ?J???????u????????? ---
-		static float camPos[3] = { 0.0f, 0.0f, 3.0f }; // ??????O??z?u
+		//---     カメラ計算     ---
+		static float camPos[3] = { 0.0f, 0.0f, 3.0f }; 
 
-		//--------- ?s???v?Z (GLM???g?p) ---
-	     Matrix4 model = Matrix4(1.0f); // ?P??s????????
+		//---------  ---
+	     Matrix4 model = Matrix4(1.0f); //// モデル行列の初期化（単位行列）
 
-		//-------?J???????u????	
-		Vector3 front;
-		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		 // --------------------------------------------------------------------
+         // カメラの前方ベクトル計算 (方向ベクトル)
+         // Yaw(左右)とPitch(上下)の回転角から、正規化された視線ベクトルを算出
+         // --------------------------------------------------------------------
+		Vector3 front;                                              //ベクトル
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));//横方向の向きを計算して入れる
 		front.y = sin(glm::radians(pitch));
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		Vector3 cameraFront = glm::normalize(front);
@@ -276,23 +285,25 @@ int main()
 		glm::vec3 upVec = glm::vec3(0.0f, 1.0f, 0.0f);
 
 		
-		// ?J?????????
+		/*// 次のウィンドウの場所指定
 		ImGui::SetNextWindowPos(ImVec2((float)leftPanelWidth + 12.0f, EditorUI::kTopBarHeight + 12.0f), ImGuiCond_Always);
+		//色指定(不透明度0.75)
 		ImGui::SetNextWindowBgAlpha(0.75f);
+		//ImGui開始
 		ImGui::Begin("Camera Editor");
 		ImGui::SliderFloat3("Camera Position", camPos, -10.0f, 10.0f);
 		ImGui::TextColored(ImVec4(1, 1, 0, 1), "FPS: %.1f", io.Framerate);
 		ImGui::End();
+		*/
 		
-		// 2. ?J?????????W?b?N 
-		if (!io.WantCaptureMouse) {
-			// --- ?Y?[?? (?z?C?[??) ---
-			if (io.MouseWheel != 0.0f) {
-				radius -= io.MouseWheel * 1.0f;
-				if (radius < 0.1f) radius = 0.1f;
+		if (!io.WantCaptureMouse) {               //マウスはUIの上にあるか
+			
+			if (io.MouseWheel != 0.0f) {          //マウスホイールが動いたら
+				radius -= io.MouseWheel * 1.0f;   //カメラから注視点までの距離半径を伸縮させる
+				if (radius < 0.1f) radius = 0.1f; //最少を0.1以下にならないように固定
 			}
 
-			// --- ??] (?????N???b?N) ---
+			// ---         ---
 			if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
 				float sensitivity = 0.2f;
 				yaw += io.MouseDelta.x * sensitivity;
@@ -519,22 +530,26 @@ int main()
 		return 0;
 }
 
-//?v???O?????I?u?W?F?N?g????????
-//  vsrc:?o?[?e?b?N?V?F?[?_?[??\?[?X?v???O???????????
-//  vsrc:?t???O?????g?V?F?[?_?[??\?[?X?v???O???????????
+/**
+ * シェーダープログラムの生成とリンク
+ * @param vsrc バーテックスシェーダーのソースコード
+ * @param fsrc フラグメントシェーダーのソースコード
+ * @return 完成したプログラムのID
+ */
 GLuint createProgram(const char* vsrc, const char* fsrc)
 {
-	//???I?u?W?F?N?g????????
+	//空のプロジェクト作成
 	const GLuint program(glCreateProgram());
 
+	// ---　　　　 頂点シェーダーの作成　　 ---
 	if (vsrc != NULL)
 	{
-		//?o?[?e?b?N?X?V?F?[?_?[??V?F?C?_?[?I?u?W?F?N?g????
+		// シェーダーオブジェクトの作成
 		const GLuint vobj(glCreateShader(GL_VERTEX_SHADER));
 		glShaderSource(vobj, 1, &vsrc, NULL);
 		glCompileShader(vobj);
 
-		//?o?[?e?b?N?X?V?F?[?_?[?I?u?W?F?N?g???v???W?F?N?g?I?u?W?F?N?g???????
+		//
 		glAttachShader(program, vobj);
 		glDeleteShader(vobj);
 	}
