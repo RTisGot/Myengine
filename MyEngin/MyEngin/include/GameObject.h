@@ -41,6 +41,7 @@ struct GameObject {
         
     }
 
+	//コンポネントを更新する関数
     void Update(float dt, GLFWwindow* window) {
         for (auto& comp : components) {
             comp->Update(dt, window);
