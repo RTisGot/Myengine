@@ -10,7 +10,11 @@
 #include "MyEngine.h"
 #include "Core/Component.h"
 
+// 前方宣言
+//Component.h
 class Component;
+
+
 // ゲームオブジェクトの構造体
 struct GameObject {
     std::string name;
@@ -105,6 +109,7 @@ inline glm::vec3 calculateRayFromPixel(double xpos, double ypos, const glm::mat4
     return glm::normalize(glm::vec3(worldPos) / worldPos.w - cameraPos);
 }
 
+//
 inline bool rayIntersectsSphere(glm::vec3 origin, glm::vec3 dir, glm::vec3 center, float radius, float& distance) {
     glm::vec3 L = center - origin;
     float tca = glm::dot(L, dir);

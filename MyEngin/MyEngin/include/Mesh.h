@@ -18,6 +18,7 @@ struct Vertex
 	glm::vec2 TexCoords;//テクスチャ座標
 };
 
+//三角形の頂点データ
 static constexpr Vertex vertex[] = {
 	{{-0.5f, -0.5f, 0.0f}},
 	{{ 0.5f, -0.5f, 0.0f}},
@@ -25,10 +26,15 @@ static constexpr Vertex vertex[] = {
     {{-0.5f, 0.5f, 0.0f} }
 };
 
+//Meshクラス
+//
 class Mesh {
 public:
 	std::vector<Vertex> vertices;
 	std::vector<unsigned int> indices;
+	
+	//VAO/VBO/EBO
+	//<GLEW/glfw3.h>
 	GLuint VAO;
 	GLuint VBO, EBO;
 
@@ -45,7 +51,6 @@ public:
 	}
 
 	
-	
 private: // クラスの内部だけ
 	void setupMesh(); 
 
@@ -53,7 +58,7 @@ private: // クラスの内部だけ
 
 
 inline void DrawGrid(Shader& shader, Mesh& cubeMesh) {
-	glm::mat4 model;
+	Matrix4 model;
 	int size = 20; // グリッドの範囲
 	float lineThickness = 0.005f; // 線の細さ
 

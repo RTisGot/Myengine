@@ -19,6 +19,11 @@ glm::mat4 modelMatrix = (1.f);         //行列の初期化
 
 const GLint WIDTH = 800, HEIGHT = 600;//ウィンドウサイズ
 
+//---------------------------------------
+//頂点データ(Vertex Data)
+//座標(x,y,z)のみ構造体の定義。
+// 重複する頂点を避けるため,各々の8点のみ定義。
+//--------------------------------------
 std::vector<Vertex> vertices = {
 	// 前面
 	{{-0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}},
@@ -26,80 +31,141 @@ std::vector<Vertex> vertices = {
 	{{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}}
 };
 
-// インデックス
+//--------------------------------------
+// インデックス(インデックス(Index Data /EBO))
+// 頂点配列の番号を指定して三角形ポリゴンを構成。
+// メモリ使用量を削減し、GPUのキャッシュ効率を上げる。
+//--------------------------------------
 std::vector<unsigned int> indices = {
-	0, 1, 2, 2, 3, 0, // ?O
-	1, 5, 6, 6, 2, 1, // ?E
-	7, 6, 5, 5, 4, 7, // ??
-	4, 0, 3, 3, 7, 4, // ??
-	3, 2, 6, 6, 7, 3, // ??
-	4, 5, 1, 1, 0, 4  // ??
+	0, 1, 2, 2, 3, 0, // 前面
+	1, 5, 6, 6, 2, 1, // 後面
+	7, 6, 5, 5, 4, 7, // 背面
+	4, 0, 3, 3, 7, 4, // 左面
+	3, 2, 6, 6, 7, 3, // 上面
+	4, 5, 1, 1, 0, 4  // 下面
 };
 
+/**
+   * @brief ユーザー入力を毎フレーム監視,即座に反映 
+//   @param window  GLFWウィンドウへのポインタ
+   * @details ESCキーが押された場合、ウィンドウを閉じるように設定する。
+   *          ゲームループ内で毎フレーム呼び出されるべき関数。
+   *          これにより、ユーザーがESCキーを押すとゲームが終了する。
+*/
 void processInput(GLFWwindow* window) {
-	// ESCでゲームウィンドウを閉じる
+	//
+	// ESCキーが押されたら,ウィンドウの閉じるフラグを立てて終了シーケンスへ移行する
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
 }
 
-// 
+//--------------------------------------
+//シーン管理データ
+//--------------------------------------
+
+//現在のシーンに存在するすべてのオブジェクトを管理するリスト
 std::vector<GameObject> worldObjects;
-std::vector<GameObject> editorBackup; // 
+
+//PIE用のバックアップ
+//実行ボタンを押した瞬間の状態を保存、停止時にエディタの状態へ戻す
+std::vector<GameObject> editorBackup; 
+
+
+//--------------------------------------
+//メイン関数
+//--------------------------------------
 
 int main()
 {
+	//--------------------------
 	//実行状態を管理するフラグ(Editorの実行フラグ)
+	//--------------------------
 	bool isPlaying = false;
 
-	//------3D変換----
+	//--------------------------
+	//      3D変換
+	//--------------------------
 	static float position[3] = { 0.0f, 0.0f, 0.0f }; // X, Y, Z 位置
 	static float rotation = 0.0f;                    // 回転角
 	static float scale = 1.0f;                       // スケール
-	//window初期化
+
+	//--------------------------
+	//     window初期化
+	//--------------------------
 	if (!glfwInit())
 	{
+		//GLFWの初期化に失敗した場合、エラーメッセージを表示して終了
 		std::cout << "GLFW is faild Initialize!" << "/n";
-		glfwTerminate();
-		return 1;
+		glfwTerminate();                                 //GLFWのリソースを解放
+		return 1;                                        //エラーコード1を返して終了
 	}
 
-	//Setup Window Properties 
+	//----- OpenGL コンテキストの設定 -----
+
+	//OpenGLバージョンを3.3に設定
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+
+	//コアプロファイルを使用
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	//MacOSXでOpenGL3.2以降を使用するための設定
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	
-
-	// ???j?^?[??????
+	//--------------------------------------------------------------------
+	// メインモニターの解像度を取得してフルスクリーンウィンドウを作成する
+	//--------------------------------------------------------------------
+	
+	// メインモニターの情報を取得
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+
+	//そのモニターのビデオモードを取得
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-	// ?t???X?N???[???E?B???h?E???
-	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "My Engine", monitor, NULL);
+	
+	// 第4引数に monitor を渡すことで、フルスクリーンモードとして初期化される
+	GLFWwindow* window = glfwCreateWindow(
+		mode->width,    // モニターの横幅
+		mode->height,   // モニターの縦幅
+		"My Engine",    // ウィンドウタイトル
+		monitor,        // 出力先のモニター（NULLならウィンドウモード）
+		NULL            // 共有コンテキスト（通常は使用しない）
+	);
 
+	//ウィンドウ生成に失敗した場合の例外処理
 	if (!window)
 	{
+		//エラー出力にmessageを表示
 		std::cout << "Failed to create window!" << "/n";
+
+		//GLFWのリソースを解放
 		glfwTerminate();
+		
+		//エラーコード1を返して終了
 		return 1;
 	}
 
-	//Get frame buffer size
+	//描画対象となる実際のピクセル数（バッファサイズ）を取得
 	int bufferWidth, bufferHeight;
 	glfwGetFramebufferSize(window, &bufferWidth, &bufferHeight);
 
-	//Set context
+	//OpenGLコンテキストを設定
 	glfwMakeContextCurrent(window);
 
 	glewExperimental = GL_TRUE;
 
-	//glew???????
+	//-------------------------------
+	//glewの初期化
+	//--------------------------------
 	if (glewInit() != GLEW_OK)
 	{
+		//GLEWの初期化に失敗した場合、エラーメッセージを表示して終了
 		std::cout << "Failed to initialize GLEW!" << "\n";
 		
+		//
 		glfwDestroyWindow(window);
+		//GLFWのリソースを解放
 		glfwTerminate();
 		return 1;
 	}
@@ -133,24 +199,25 @@ int main()
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);//?}?E?X???????????
 
   //------------------
-	bool isDragging = false; //objectdrag??false?t?^
+	bool isDragging = false;                 //オブジェクトがドラッグされているかどうか
 	bool lastLeftState = false;
-	float dragDistance = 0.0f; // ?h???b?O???????????????
-	glm::vec3 dragOffset; // ?N???b?N?????n?_???????S??Y??????
-	static int selected = -1; //?I????e??index????????
-	static Vector3 spawnPos;  //???j???[???J???????????W
+	float dragDistance = 0.0f;               // ドラッグ開始位置からの距離
+	glm::vec3 dragOffset;                    // ドラッグ中のオフセット
+	static int selected = -1;                // 選択中のオブジェクトのインデックス
+	static Vector3 spawnPos;                // 新しいオブジェクトの生成位置
 	worldObjects.reserve(100);
 	double lastFrameTime = glfwGetTime();
 
-	
-	//--------------------------------???C?????[?v---------------------//
+	//------------------------------------------
+	//              メインループ             //
+	//------------------------------------------
 	while (!glfwWindowShouldClose(window))
 	{
 		const double currentTime = glfwGetTime();
 		const float dt = static_cast<float>(currentTime - lastFrameTime);
 		lastFrameTime = currentTime;
 
-		//?t???[???o?b?t?@?T?C?Y?????
+		// フレームバッファサイズを取得
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 
