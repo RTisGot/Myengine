@@ -7,6 +7,7 @@
 #include "Tagsystem.h"
 #include "Core/EditorUI.h"
 #include "PlayerComponent.h"
+#include "MoveComponent.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
@@ -372,6 +373,8 @@ int main()
 				}
 				ImGui::Separator();
 			}
+
+			
 
 			ImGui::Text("--- Add Object ---");
 			if (ImGui::MenuItem("Cube")) { worldObjects.push_back(GameObject("Cube", Vector3(0, 0, 0))); }

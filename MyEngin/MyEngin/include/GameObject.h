@@ -46,11 +46,9 @@ struct GameObject {
     }
 
 	//コンポネントを更新する関数
-    void Update(float dt, GLFWwindow* window) {
-        for (auto& comp : components) {
-            comp->Update(dt, window);
-        }
-    }
+    void Update(float dt, GLFWwindow* window);
+      
+    
 
     template<typename T>
     std::shared_ptr<T> GetComponent() const {
