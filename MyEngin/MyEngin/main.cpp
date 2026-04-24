@@ -13,33 +13,27 @@
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
-#include<vector>
+#include <vector>
 #include <iostream>
 
-glm::mat4 modelMatrix = (1.f);         //行列の初期化
+// --- グローバル設定・リソース定義 ---
 
-const GLint WIDTH = 800, HEIGHT = 600;//ウィンドウサイズ
+glm::mat4 modelMatrix = glm::mat4(1.0f); // モデル行列の初期化（単位行列）
+const GLint WIDTH = 800, HEIGHT = 600;   // デフォルトのウィンドウサイズ
 
-//---------------------------------------
-//頂点データ(Vertex Data)
-//座標(x,y,z)のみ構造体の定義。
-// 重複する頂点を避けるため,各々の8点のみ定義。
-//--------------------------------------
+// 頂点データ(Vertex Data): 立方体を構成するユニークな8頂点を定義
 std::vector<Vertex> vertices = {
-	// 前面
+	// 前面 (Z+)
 	{{-0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}},
-	// 背面
+	// 背面 (Z-)
 	{{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}}
 };
 
-//--------------------------------------
-// インデックス(インデックス(Index Data /EBO))
-// 頂点配列の番号を指定して三角形ポリゴンを構成。
-// メモリ使用量を削減し、GPUのキャッシュ効率を上げる。
-//--------------------------------------
+// インデックスデータ(Index Data / EBO): 頂点配列を参照して三角形ポリゴンを構築
+// メモリ使用量を削減し、GPUのキャッシュ効率を最適化する
 std::vector<unsigned int> indices = {
 	0, 1, 2, 2, 3, 0, // 前面
-	1, 5, 6, 6, 2, 1, // 後面
+	1, 5, 6, 6, 2, 1, // 右面
 	7, 6, 5, 5, 4, 7, // 背面
 	4, 0, 3, 3, 7, 4, // 左面
 	3, 2, 6, 6, 7, 3, // 上面
@@ -47,264 +41,182 @@ std::vector<unsigned int> indices = {
 };
 
 /**
-   * @brief ユーザー入力を毎フレーム監視,即座に反映 
-//   @param window  GLFWウィンドウへのポインタ
-   * @details ESCキーが押された場合、ウィンドウを閉じるように設定する。
-   *          ゲームループ内で毎フレーム呼び出されるべき関数。
-   *          これにより、ユーザーがESCキーを押すとゲームが終了する。
-*/
+ * @brief ユーザー入力の監視と反映
+ * @param window GLFWウィンドウへのポインタ
+ * @details ESCキー押下時に終了フラグを立てる等のリアルタイム入力を処理する
+ */
 void processInput(GLFWwindow* window) {
-	//
-	// ESCキーが押されたら,ウィンドウの閉じるフラグを立てて終了シーケンスへ移行する
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
 }
 
-//--------------------------------------
-//シーン管理データ
-//--------------------------------------
+// --- シーン管理・永続データ ---
 
-//現在のシーンに存在するすべてのオブジェクトを管理するリスト
-std::vector<GameObject> worldObjects;
-
-//PIE用のバックアップ
-//実行ボタンを押した瞬間の状態を保存、停止時にエディタの状態へ戻す
-std::vector<GameObject> editorBackup; 
-
-
-//--------------------------------------
-//メイン関数
-//--------------------------------------
+std::vector<GameObject> worldObjects; // アクティブな全ゲームオブジェクト
+std::vector<GameObject> editorBackup; // PIE(Play In Editor)停止時の復元用バックアップ
 
 int main()
 {
-	//--------------------------
-	//実行状態を管理するフラグ(Editorの実行フラグ)
-	//--------------------------
+	// エディタの実行状態管理フラグ
 	bool isPlaying = false;
 
-	//--------------------------
-	//      3D変換
-	//--------------------------
-	static float position[3] = { 0.0f, 0.0f, 0.0f }; // X, Y, Z 位置
-	static float rotation = 0.0f;                    // 回転角
-	static float scale = 1.0f;                       // スケール
+	// トランスフォーム操作用変数
+	static float position[3] = { 0.0f, 0.0f, 0.0f };
+	static float rotation = 0.0f;
+	static float scale = 1.0f;
 
-	//--------------------------
-	//     window初期化
-	//--------------------------
+	// --- GLFWの初期化 ---
 	if (!glfwInit())
 	{
-		//GLFWの初期化に失敗した場合、エラーメッセージを表示して終了
-		std::cout << "GLFW is faild Initialize!" << "/n";
-		glfwTerminate();                                 //GLFWのリソースを解放
-		return 1;                                        //エラーコード1を返して終了
+		std::cerr << "Fatal Error: GLFWの初期化に失敗しました。" << std::endl;
+		glfwTerminate();
+		return 1;
 	}
 
-	//----- OpenGL コンテキストの設定 -----
-
-	//OpenGLバージョンを3.3に設定
+	// OpenGLコンテキストプロパティの設定 (Version 3.3 Core Profile)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-
-	//コアプロファイルを使用
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // macOS互換性確保
 
-	//MacOSXでOpenGL3.2以降を使用するための設定
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	
-	//--------------------------------------------------------------------
-	// メインモニターの解像度を取得してフルスクリーンウィンドウを作成する
-	//--------------------------------------------------------------------
-	
-	// メインモニターの情報を取得
+	// プライマリモニターの解像度に基づいたフルスクリーンウィンドウの生成
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-
-	//そのモニターのビデオモードを取得
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-	
-	// 第4引数に monitor を渡すことで、フルスクリーンモードとして初期化される
 	GLFWwindow* window = glfwCreateWindow(
-		mode->width,    // モニターの横幅
-		mode->height,   // モニターの縦幅
-		"My Engine",    // ウィンドウタイトル
-		NULL,        // 出力先のモニター（NULLならウィンドウモード）
-		NULL            // 共有コンテキスト（通常は使用しない）
+		mode->width,
+		mode->height,
+		"My Engine",
+		NULL, // ウィンドウモードの場合はNULL
+		NULL
 	);
 
 	if (window) glfwSetWindowPos(window, 100, 100);
-	//ウィンドウ生成に失敗した場合の例外処理
+
 	if (!window)
 	{
-		//エラー出力にmessageを表示
-		std::cout << "Failed to create window!" << "/n";
-
-		//GLFWのリソースを解放
+		std::cerr << "Fatal Error: GLFWウィンドウの生成に失敗しました。" << std::endl;
 		glfwTerminate();
-		
-		//エラーコード1を返して終了
 		return 1;
 	}
 
-	//描画対象となる実際のピクセル数（バッファサイズ）を取得
+	// フレームバッファ（実際の描画ピクセルサイズ）の取得
 	int bufferWidth, bufferHeight;
 	glfwGetFramebufferSize(window, &bufferWidth, &bufferHeight);
 
-	//OpenGLコンテキストを設定
-	glfwMakeContextCurrent(window);
+	glfwMakeContextCurrent(window); // 現在のコンテキストを対象に設定
+	glewExperimental = GL_TRUE;     // モダンな機能の有効化
 
-	glewExperimental = GL_TRUE;
-
-	//-------------------------------
-	//glewの初期化
-	//--------------------------------
+	// --- GLEWの初期化 (拡張機能のロード) ---
 	if (glewInit() != GLEW_OK)
 	{
-		//GLEWの初期化に失敗した場合、エラーメッセージを表示して終了
-		std::cout << "Failed to initialize GLEW!" << "\n";
-		
-		//
+		std::cerr << "Fatal Error: GLEWの初期化に失敗しました。" << std::endl;
 		glfwDestroyWindow(window);
-		//GLFWのリソースを解放
 		glfwTerminate();
 		return 1;
 	}
 
-	//深度テスト
-	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST); // 深度テストを有効化（3D空間の前後関係を正しく描画）
 
-	// ------------------------------------------------------------------
-	// ImGui 初期設定
-	// ------------------------------------------------------------------
+	// --- ImGui初期設定 (ミドルウェアのセットアップ) ---
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-	// バックエンドの初期化 (GLFW/OpenGL3)
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
+	ImGui::StyleColorsDark(); // エディタらしいダークテーマを適用
 
-	//ダークモード
-	ImGui::StyleColorsDark(); 
-	// GPU側のシェーダーを読み込む 
-	Shader ourShader("shader.vert", "shader.frag");
-	//3DモデルデータをGPUメモリに送りこむ
-	Mesh myMesh(vertices, indices);
-	
-	// ------------------------------------------------------------------
-	// エディタ用カメラ・操作変数
-	// ------------------------------------------------------------------
-	static float yaw = -90.0f;            //横回転
-	static float pitch = 0.0f;            // 縦回転
-	float radius = 5.0f;                  //角度
+	// --- アセット・リソースのロード ---
+	Shader ourShader("shader.vert", "shader.frag"); // カスタムシェーダーのコンパイル
+	Mesh myMesh(vertices, indices);                 // プリミティブメッシュの生成
+
+	// --- エディタ用カメラ・制御変数 ---
+	static float yaw = -90.0f;   // 水平回転
+	static float pitch = 0.0f;   // 垂直回転
+	float radius = 5.0f;         // 注視点からの距離
 	static double lastX = 400, lastY = 300;
 	static bool firstMouse = true;
 
-	// マウスカーソルを通常表示に設定
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-  //------------------
-	bool isDragging = false;                 //オブジェクトがドラッグされているかどうか
-	bool lastLeftState = false;
-	float dragDistance = 0.0f;               // ドラッグ開始位置からの距離
-	glm::vec3 dragOffset;                    // ドラッグ中のオフセット
-	static int selected = -1;                // 選択中のオブジェクトのインデックス
-	static Vector3 spawnPos;                // 新しいオブジェクトの生成位置
-	worldObjects.reserve(100);
+	bool isDragging = false;       // オブジェクトドラッグ状態フラグ
+	bool lastLeftState = false;    // 前フレームのマウス左ボタン状態
+	float dragDistance = 0.0f;
+	glm::vec3 dragOffset;
+	static int selected = -1;      // 現在選択中のオブジェクトID
+	static Vector3 spawnPos;
+	worldObjects.reserve(100);     // メモリ再確保を抑制するための予約
 	double lastFrameTime = glfwGetTime();
 
-	//------------------------------------------
-	//              メインループ             //
-	//------------------------------------------
+	// ------------------------------------------------------------------
+	// メインゲームループ
+	// ------------------------------------------------------------------
 	while (!glfwWindowShouldClose(window))
 	{
+		// デルタタイム(dt)の算出
 		const double currentTime = glfwGetTime();
 		const float dt = static_cast<float>(currentTime - lastFrameTime);
 		lastFrameTime = currentTime;
 
-		// フレームバッファサイズを取得
+		// ビューポート計算 (左右パネルを除いた中央領域を算出)
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 
-		
 		const int leftPanelWidth = (int)EditorUI::kLeftPanelWidth;
 		const int rightPanelWidth = (int)EditorUI::kRightPanelWidth;
 		const int topBarHeight = (int)EditorUI::kTopBarHeight;
 		const int viewportWidth = display_w - leftPanelWidth - rightPanelWidth;
 		const int viewportHeight = display_h - topBarHeight;
+
 		glViewport(leftPanelWidth, 0, viewportWidth, viewportHeight);
 
-		// 射影行列の更新
+		// 射影行列の更新 (アスペクト比追従)
 		float aspect = (float)viewportWidth / (float)viewportHeight;
 		glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-		
+
 		glfwPollEvents();
 
-		// ImGui フレーム開始
+		// ImGuiフレーム開始シーケンス
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
 		processInput(window);
-		
 
-		// PIE実行中の更新処理
+		// PIE実行中のロジック更新
 		if (isPlaying) {
 			for (auto& obj : worldObjects) {
 				obj.Update(dt, window);
 			}
 			Tagsystem::Update(worldObjects);
 		}
-		else {
-		}
 
-		//PIE UI
+		// エディタUIの描画
 		EditorUI::ShowMainEditor(isPlaying, worldObjects, editorBackup);
 
-		//---     カメラ計算     ---
-		static float camPos[3] = { 0.0f, 0.0f, 3.0f }; 
+		// --- カメラ座標計算 (Arcball Camera) ---
+		static float camPos[3] = { 0.0f, 0.0f, 3.0f };
+		Matrix4 model = Matrix4(1.0f);
 
-		//---------  ---
-	     Matrix4 model = Matrix4(1.0f); //// モデル行列の初期化（単位行列）
-
-		 // --------------------------------------------------------------------
-         // カメラの前方ベクトル計算 (方向ベクトル)
-         // Yaw(左右)とPitch(上下)の回転角から、正規化された視線ベクトルを算出
-         // --------------------------------------------------------------------
-		Vector3 front;                                              //ベクトル
-		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));//横方向の向きを計算して入れる
+		// オイラー角からカメラの前方ベクトルを算出
+		Vector3 front;
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
 		front.y = sin(glm::radians(pitch));
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		Vector3 cameraFront = glm::normalize(front);
 
 		Vector3 camVec = Vector3(camPos[0], camPos[1], camPos[2]);
 		glm::vec3 targetPos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-		// ??????x?N?g??
 		glm::vec3 upVec = glm::vec3(0.0f, 1.0f, 0.0f);
 
-		
-		/*// 次のウィンドウの場所指定
-		ImGui::SetNextWindowPos(ImVec2((float)leftPanelWidth + 12.0f, EditorUI::kTopBarHeight + 12.0f), ImGuiCond_Always);
-		//色指定(不透明度0.75)
-		ImGui::SetNextWindowBgAlpha(0.75f);
-		//ImGui開始
-		ImGui::Begin("Camera Editor");
-		ImGui::SliderFloat3("Camera Position", camPos, -10.0f, 10.0f);
-		ImGui::TextColored(ImVec4(1, 1, 0, 1), "FPS: %.1f", io.Framerate);
-		ImGui::End();
-		*/
-		
-		if (!io.WantCaptureMouse) {               //マウスはUIの上にあるか
-			
-			if (io.MouseWheel != 0.0f) {          //マウスホイールが動いたら
-				radius -= io.MouseWheel * 1.0f;   //カメラから注視点までの距離半径を伸縮させる
-				if (radius < 0.1f) radius = 0.1f; //最少を0.1以下にならないように固定
+		// カメラ制御入力の処理 (UIへの入力を遮断)
+		if (!io.WantCaptureMouse) {
+			if (io.MouseWheel != 0.0f) {
+				radius -= io.MouseWheel * 1.0f;
+				if (radius < 0.1f) radius = 0.1f;
 			}
-
-			// ---         ---
 			if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
 				float sensitivity = 0.2f;
 				yaw += io.MouseDelta.x * sensitivity;
@@ -314,7 +226,7 @@ int main()
 			}
 		}
 
-		// 3. ???J???????W??View?s????m?????? (?????S????????)
+		// ビューモード（一人称/三人称）に応じたカメラ位置確定
 		std::shared_ptr<PlayerComponent> activePlayerComp = nullptr;
 		GameObject* activePlayerObject = nullptr;
 		for (auto& obj : worldObjects) {
@@ -346,24 +258,21 @@ int main()
 		}
 		glm::mat4 view = glm::lookAt(camVec, targetPos, glm::vec3(0, 1, 0));
 
-		// --- ?E?N???b?N????j???[???J?? ---
+		// --- コンテキストメニュー (右クリック操作) ---
 		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS && !io.WantCaptureMouse) {
-			ImGui::OpenPopup("ObjectMenu");//?I?u?W?F?N?g???j???[??E?B???h?E???J??
+			ImGui::OpenPopup("ObjectMenu");
 
-			//???j???[?\???v?Z
-			double x, y;//???j???[????W(x,y)
-			glfwGetCursorPos(window, &x, &y);//?J?[?\?????u?????
-			Vector3 rayDir = calculateRayFromPixel(x, y,projection, view);//
-			
+			double x, y;
+			glfwGetCursorPos(window, &x, &y);
+			Vector3 rayDir = calculateRayFromPixel(x, y, projection, view);
 
-			float dist = 5.0f;                            // ?J????????5m????u
-			spawnPos = camVec + (rayDir * dist);          //??????z?u???W???v?Z
-			float snap = 0.5f;                            //?X?i?b?v????
-			spawnPos = glm::round(spawnPos / snap) * snap;//
+			float dist = 5.0f;
+			spawnPos = camVec + (rayDir * dist);
+			float snap = 0.5f; // グリッドスナップ設定
+			spawnPos = glm::round(spawnPos / snap) * snap;
 		}
-		// ImGui??E?N???b?N???j???[?i?|?b?v?A?b?v?j??`??
+
 		if (ImGui::BeginPopup("ObjectMenu")) {
-			// ?I????????????????????u???v??\??
 			if (selected != -1) {
 				ImGui::Text("Selected: %s", worldObjects[selected].name.c_str());
 				if (ImGui::MenuItem("Delete", "Delete Key")) {
@@ -373,208 +282,157 @@ int main()
 				}
 				ImGui::Separator();
 			}
-
-			
-
 			ImGui::Text("--- Add Object ---");
 			if (ImGui::MenuItem("Cube")) { worldObjects.push_back(GameObject("Cube", Vector3(0, 0, 0))); }
-			if (ImGui::MenuItem("Sphere")) { /* ???????? */ }
-
 			ImGui::EndPopup();
 		}
 
-		ImGuiIO& io = ImGui::GetIO();
+		// --- 3Dピッキング・ドラッグ操作ロジック ---
 		bool currentLeftState = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
 
-		//  ???{?^???????????????
-		if (currentLeftState && !lastLeftState) {
+		if (currentLeftState && !lastLeftState && !io.WantCaptureMouse) {
+			double xpos, ypos;
+			glfwGetCursorPos(window, &xpos, &ypos);
+			glm::vec3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
 
-			// UI??G??????????`?F?b?N
-			if (io.WantCaptureMouse) {}
-			else {
-				// 2. UI??G?????????????A3D????????T????s??
-				double xpos, ypos;
-				glfwGetCursorPos(window, &xpos, &ypos);
-				// ??Viewport?????????????? xpos - sidebarWidth ???g??
-				glm::vec3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
-				
+			int hitIndex = -1;
+			float closestDist = 100000.0f;
 
-				int hitIndex = -1;
-				float closestDist = 100000.0f;
-
-				for (int i = 0; i < (int)worldObjects.size(); i++) {
-					float distToRay = glm::length(glm::cross(rayDir, worldObjects[i].position - camVec));
-					if (distToRay < 0.8f) {
-						float distToCam = glm::distance(camVec, worldObjects[i].position);
-						if (distToCam < closestDist) {
-							closestDist = distToCam;
-							hitIndex = i;
-						}
+			for (int i = 0; i < (int)worldObjects.size(); i++) {
+				float distToRay = glm::length(glm::cross(rayDir, worldObjects[i].position - camVec));
+				if (distToRay < 0.8f) { // 当たり判定の閾値
+					float distToCam = glm::distance(camVec, worldObjects[i].position);
+					if (distToCam < closestDist) {
+						closestDist = distToCam;
+						hitIndex = i;
 					}
 				}
+			}
 
-				// 3. ???????K?p
-				if (hitIndex != -1) {
-					selected = hitIndex;
-					isDragging = true;
-					dragDistance = glm::distance(camVec, worldObjects[selected].position);
-				}
-				else {
-					// ?w?i???N???b?N??????????????
-					selected = -1;
-					isDragging = false;
-				}
+			if (hitIndex != -1) {
+				selected = hitIndex;
+				isDragging = true;
+				dragDistance = glm::distance(camVec, worldObjects[selected].position);
+			}
+			else {
+				selected = -1;
+				isDragging = false;
 			}
 		}
 
-		// 2. ?h???b?O???????
-		if (isDragging && currentLeftState && selected != -1) {
-			if (!io.WantCaptureMouse) {
-				double xpos, ypos;
-				glfwGetCursorPos(window, &xpos, &ypos);
+		// ドラッグ中のオブジェクト位置更新
+		if (isDragging && currentLeftState && selected != -1 && !io.WantCaptureMouse) {
+			double xpos, ypos;
+			glfwGetCursorPos(window, &xpos, &ypos);
+			float currentDist = glm::distance(camVec, worldObjects[selected].position);
+			Vector3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
+			worldObjects[selected].position = camVec + (rayDir * currentDist);
 
-				// ?J?????????????????????????????
-				float currentDist = glm::distance(camVec, worldObjects[selected].position);
-
-				// ?????}?E?X??u????V???????C???v?Z
-				Vector3 rayDir = calculateRayFromPixel(xpos, ypos, projection, view);
-
-				// ??????u???X?V?F ?J??????u + (???? * ???????)
-				worldObjects[selected].position = camVec + (rayDir * currentDist);
-
-				// ?X?i?b?v?????i0.5?P???z???j
-				float snapValue = 0.5f;
-				worldObjects[selected].position = glm::round(worldObjects[selected].position / snapValue) * snapValue;//0.5????????
-			}
+			float snapValue = 0.5f; // 移動スナップ
+			worldObjects[selected].position = glm::round(worldObjects[selected].position / snapValue) * snapValue;
 		}
-		
 
 		lastLeftState = currentLeftState;
-		if (selected >= 0 && selected < (int)worldObjects.size()) {
-			float snapValue = 0.5f;
-			worldObjects[selected].position.x = round(worldObjects[selected].position.x / snapValue) * snapValue;
-			worldObjects[selected].position.y = round(worldObjects[selected].position.y / snapValue) * snapValue;
-			worldObjects[selected].position.z = round(worldObjects[selected].position.z / snapValue) * snapValue;
-		}
-		//tag??X?V
+
+		// タグシステムとUI更新
 		Tagsystem::Update(worldObjects);
 		Tagsystem::ShowImGuiWindow();
 
-		
-		// --- ?`??????  ---
-		glClearColor(0.2f, 0.2f, 0.2f, 1.0f); // ?w?i?F?????
+		// --- レンダーパス: 背景とバッファクリア ---
+		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		ourShader.use();
 
-		int colorLoc = glGetUniformLocation(ourShader.ID, "ourColor");
-		// Location???? (?`???[?v????O??s??)
+		// ユニフォーム変数のロケーション取得
 		unsigned int modelLoc = glGetUniformLocation(ourShader.ID, "model");
 		unsigned int viewLoc = glGetUniformLocation(ourShader.ID, "view");
 		unsigned int projLoc = glGetUniformLocation(ourShader.ID, "projection");
 		int vertexColorLocation = glGetUniformLocation(ourShader.ID, "ourColor");
 
-		// ?J?????E?v???W?F?N?V?????s?????]??
+		// カメラ・射影行列の適用
 		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-		
-		// ?O???b?h??`??
+
+		// グリッド描画
 		glm::mat4 identity = glm::mat4(1.0f);
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(identity));
-		glUniform4f(vertexColorLocation, 0.4f, 0.4f, 0.4f, 1.0f);//?O???b?h??F?????
+		glUniform4f(vertexColorLocation, 0.4f, 0.4f, 0.4f, 1.0f);
 		DrawGrid(ourShader, myMesh);
 
-		//?I?u?W?F?N?g??`???[?v
+		// オブジェクト描画ループ
 		for (int i = 0; i < worldObjects.size(); i++) {
 			glm::mat4 objModel = worldObjects[i].getModelMatrix();
 
-			// 1. ?I????????????A???u????g?v??`??
+			// 選択中オブジェクトのアウトライン描画 (深度テスト無効化による強調)
 			if (i == selected) {
-				// ?[?x?e?X?g?????I??I?t?????
 				glDisable(GL_DEPTH_TEST);
-
-				// 1.05?{??????g????????f???s??????
 				glm::mat4 outlineModel = glm::scale(objModel, glm::vec3(1.02f));
 				glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(outlineModel));
-
-				// ??F??`??
-				glUniform4f(vertexColorLocation, 0.0f, 0.5f, 1.0f, 1.0f); 
+				glUniform4f(vertexColorLocation, 0.0f, 0.5f, 1.0f, 1.0f);
 				myMesh.Draw(ourShader);
-
-				glEnable(GL_DEPTH_TEST); // ?[?x?e?X?g????
+				glEnable(GL_DEPTH_TEST);
 			}
 
-			// 2. ?{???`??
+			// 本体描画
 			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(objModel));
 			if (i == selected) {
-				glUniform4f(vertexColorLocation, 1.0f, 1.0f, 0.0f, 1.0f); // ?{?????F
+				glUniform4f(vertexColorLocation, 1.0f, 1.0f, 0.0f, 1.0f); // ハイライト色
 			}
 			else {
-				glUniform4f(vertexColorLocation, 1.0f, 0.5f, 0.2f, 1.0f); // ???F
+				glUniform4f(vertexColorLocation, 1.0f, 0.5f, 0.2f, 1.0f); // 通常色
 			}
 			myMesh.Draw(ourShader);
 		}
-		
 
-		// --- ImGui ????????f?????? ---
+		// ImGui描画実行
 		ImGui::Render();
-		
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-		glfwSwapBuffers(window);
-		
-
+		glfwSwapBuffers(window); // ダブルバッファの入れ替え
 	}
-		ImGui_ImplOpenGL3_Shutdown();
-		ImGui_ImplGlfw_Shutdown();
-		ImGui::DestroyContext();
-		glfwDestroyWindow(window);
-		glfwTerminate();
-		return 0;
+
+	// --- 終了シーケンス・リソース解放 ---
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+	glfwDestroyWindow(window);
+	glfwTerminate();
+	return 0;
 }
 
 /**
- * シェーダープログラムの生成とリンク
+ * @brief シェーダープログラムの生成とリンク
  * @param vsrc バーテックスシェーダーのソースコード
  * @param fsrc フラグメントシェーダーのソースコード
- * @return 完成したプログラムのID
+ * @return リンク済みシェーダープログラムID
  */
 GLuint createProgram(const char* vsrc, const char* fsrc)
 {
-	//空のプロジェクト作成
 	const GLuint program(glCreateProgram());
 
-	// ---　　　　 頂点シェーダーの作成　　 ---
 	if (vsrc != NULL)
 	{
-		// シェーダーオブジェクトの作成
 		const GLuint vobj(glCreateShader(GL_VERTEX_SHADER));
 		glShaderSource(vobj, 1, &vsrc, NULL);
 		glCompileShader(vobj);
-
-		//
 		glAttachShader(program, vobj);
 		glDeleteShader(vobj);
 	}
 
 	if (fsrc != NULL)
 	{
-		//?t???O?????g?V?F?[?_?[??V?F?[?_?[?I?u?W?F?N?g????????
 		const GLuint fobj(glCreateShader(GL_FRAGMENT_SHADER));
 		glShaderSource(fobj, 1, &fsrc, NULL);
 		glCompileShader(fobj);
-
-		//?t???O?????g?V?F?[?_?[??V?F?[?_?[?I?u?W?F?N?g???v???O?????I?u?W?F?N?g??g?????
 		glAttachShader(program, fobj);
 		glDeleteShader(fobj);
 	}
 
-	//?v???O?????I?u?W?F?N?g???????N????
+	// 属性位置の固定バインド
 	glBindAttribLocation(program, 0, "position");
 	glBindFragDataLocation(program, 0, "fragment");
 	glLinkProgram(program);
 
-	//???????v???O?????I?u?W?F?N?g????
 	return program;
 }
-

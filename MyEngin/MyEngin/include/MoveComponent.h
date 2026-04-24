@@ -1,22 +1,36 @@
 #pragma once
 #include "Core/Component.h"
 #include <GLFW/glfw3.h>
-#include "../imgui/imgui.h" // ImGuiを使うために必要
+#include "../imgui/imgui.h"
 
-// GameObject.h をインクルードするのではなく、
-// 「GameObjectという名前の構造体が後で出てくるよ」とだけ教える（前方宣言）
+// 前方宣言: ヘッダー間の循環参照を防止し、コンパイル時間を短縮
 struct GameObject;
 
+/**
+ * @class MoveComponent
+ * @brief オブジェクトに移動能力を付与するコンポーネント
+ * @details キーボード入力や自動処理によって親GameObjectのTransformを操作します。
+ */
 class MoveComponent : public Component {
 public:
+    // 移動速度 (m/s 単位を想定)
     float speed = 0.05f;
 
-    // BeginPlay は中身がなければ書かなくても親のものが呼ばれます
+    /**
+     * @brief コンポーネント実行開始時に一度だけ呼ばれる初期化処理
+     */
     void BeginPlay() override;
 
-    // Update は 1 つにまとめます
+    /**
+     * @brief 毎フレーム実行される更新処理
+     * @param dt 前フレームからの経過時間 (DeltaTime)
+     * @param window 入力検知用のGLFWウィンドウハンドル
+     */
     void Update(float dt, GLFWwindow* window) override;
 
-    // OnGui も 1 つにまとめます
+    /**
+     * @brief エディタのInspectorウィンドウ等に表示するGUI描画処理
+     * @details ImGuiを用いて、実行中にspeed等のパラメータをリアルタイム編集可能にします。
+     */
     void OnGui() override;
 };
